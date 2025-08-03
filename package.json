@@ -1,0 +1,38 @@
+{
+  "name": "pickcourt-supabase",
+  "version": "1.0.0",
+  "description": "Court booking API built with Supabase Edge Functions",
+  "scripts": {
+    "dev": "supabase start",
+    "stop": "supabase stop",
+    "reset": "supabase db reset",
+    "migration:new": "supabase migration new",
+    "migration:up": "supabase db push",
+    "functions:serve": "supabase functions serve",
+    "functions:deploy": "supabase functions deploy",
+    "typecheck": "deno check supabase/functions/**/*.ts",
+    "lint": "deno lint supabase/functions/",
+    "test": "deno test supabase/functions/",
+    "generate:types": "supabase gen types typescript --local > src/types/database.types.ts",
+    "generate:models": "tsx scripts/simple-schema-reader.ts",
+    "build:types": "npm run generate:types && npm run generate:models"
+  },
+  "keywords": [
+    "supabase",
+    "edge-functions",
+    "typescript",
+    "court-booking",
+    "api"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.0",
+    "supabase": "^1.0.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.2.0"
+  }
+}
