@@ -1,4 +1,12 @@
-import { createResponse, createErrorResponse, requireAuth, corsHeaders, createSupabaseAdminClient } from '../_shared/utils.ts'
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import {
+  createResponse,
+  createErrorResponse,
+  requireAuth,
+  corsHeaders,
+  createSupabaseAdminClient,
+  createAuthenticatedClient
+} from '../_shared/utils.ts'
 
 interface CancelBookingRequest {
   booking_id: string
@@ -7,9 +15,7 @@ interface CancelBookingRequest {
   notes?: string
 }
 
-Deno.serve(async (req) => {
-
-  console.log(12312321);
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -19,66 +25,30 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const auth = requireAuth(['super_admin', 'admin', 'customer'])
-    const context = await auth(req)
-
-    if (context instanceof Response) {
-      return context
-    }
-
-    const { tenant, user } = context
     const requestData: CancelBookingRequest = await req.json()
 
     if (!requestData.booking_id) {
       return createErrorResponse('Missing required field: booking_id', 400)
     }
 
-    const supabase = createSupabaseAdminClient()
+
+    const supabase = createAuthenticatedClient(req)
+    const { data: user, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return createErrorResponse('Unauthorized', 401)
+    }
 
     // Get booking with court and club info
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select(`
-        id,
-        court_id,
-        user_id,
-        start_time,
-        end_time,
-        booking_type,
-        total_amount,
-        status,
-        metadata,
-        created_at,
-        updated_at,
-        court:courts(
-          id,
-          name,
-          hourly_rate,
-          club:clubs(
-            id,
-            name,
-            tenant_id
-          )
-        )
-      `)
+      .select()
       .eq('id', requestData.booking_id)
       .single()
 
     if (bookingError || !booking) {
+      console.log(bookingError);
       return createErrorResponse('Booking not found', 404)
-    }
-
-    // Check tenant access
-    if (booking.court.club.tenant_id !== tenant.id) {
-      return createErrorResponse('Booking not accessible', 403)
-    }
-
-    // Check user permissions
-    const isOwner = booking.user_id === user.id
-    const isAdmin = user.role === 'admin' || user.role === 'super_admin'
-    
-    if (!isOwner && !isAdmin) {
-      return createErrorResponse('Insufficient permissions to cancel this booking', 403)
     }
 
     // Check if booking can be cancelled
@@ -95,18 +65,10 @@ Deno.serve(async (req) => {
     const now = new Date()
     const timeDiffHours = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60)
 
-    // For customers, enforce cancellation policy
-    if (user.role === 'customer' && timeDiffHours < 2) {
-      return createErrorResponse('Cannot cancel booking less than 2 hours before start time', 400)
-    }
 
     // Determine refund amount
-    let refundAmount = 0
+    let refundAmount: number
     if (requestData.refund_amount !== undefined) {
-      // Admin specified refund amount
-      if (!isAdmin) {
-        return createErrorResponse('Only admins can specify refund amount', 403)
-      }
       refundAmount = Math.max(0, Math.min(requestData.refund_amount, booking.total_amount))
     } else {
       // Auto-calculate refund based on policy
@@ -128,7 +90,6 @@ Deno.serve(async (req) => {
       metadata: {
         ...booking.metadata,
         cancelled_at: now_iso,
-        cancelled_by: user.id,
         cancellation_reason: requestData.reason,
         cancellation_notes: requestData.notes,
         refund_amount: refundAmount,
@@ -141,23 +102,49 @@ Deno.serve(async (req) => {
       .from('bookings')
       .update(updateData)
       .eq('id', requestData.booking_id)
-      .select(`
-        id,
-        court_id,
-        user_id,
-        start_time,
-        end_time,
-        booking_type,
-        total_amount,
-        status,
-        metadata,
-        created_at,
-        updated_at
-      `)
+      .select()
       .single()
 
     if (updateError) {
       return createErrorResponse(updateError.message, 400)
+    }
+
+    // Cancel all booked slots for this booking
+    const { error: bookedSlotsError } = await supabase
+      .from('booked_slots')
+      .update({
+        status: 'cancelled',
+        updated_at: now_iso,
+        metadata: {
+          cancelled_at: now_iso,
+          cancelled_by: user.id,
+          cancellation_reason: requestData.reason,
+          cancellation_notes: requestData.notes
+        }
+      })
+      .eq('booking_id', requestData.booking_id)
+
+    if (bookedSlotsError) {
+      console.error('Error cancelling booked slots:', bookedSlotsError)
+    }
+
+    // Cancel all matches for this booking
+    const { error: matchesError } = await supabase
+      .from('matches')
+      .update({
+        status: 'cancelled',
+        updated_at: now_iso,
+        metadata: {
+          cancelled_at: now_iso,
+          cancelled_by: user.id,
+          cancellation_reason: requestData.reason,
+          cancellation_notes: requestData.notes
+        }
+      })
+      .eq('booking_id', requestData.booking_id)
+
+    if (matchesError) {
+      console.error('Error cancelling matches:', matchesError)
     }
 
     // Create refund payment record if applicable
@@ -169,7 +156,6 @@ Deno.serve(async (req) => {
         status: 'pending', // Admin needs to process refund
         metadata: {
           refund_for_cancellation: true,
-          cancelled_by: user.id,
           cancelled_at: now_iso,
           original_amount: booking.total_amount,
           refund_reason: requestData.reason
@@ -184,12 +170,6 @@ Deno.serve(async (req) => {
     // Return cancelled booking with court info and refund details
     const responseData = {
       ...updatedBooking,
-      court: {
-        id: booking.court.id,
-        name: booking.court.name,
-        hourly_rate: booking.court.hourly_rate,
-        club: booking.court.club
-      },
       refund_info: {
         refund_amount: refundAmount,
         refund_percentage: Math.round((refundAmount / booking.total_amount) * 100),

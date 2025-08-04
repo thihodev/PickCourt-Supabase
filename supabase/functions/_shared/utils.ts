@@ -86,7 +86,7 @@ export async function getTenantFromRequest(req: Request): Promise<TenantContext 
   };
 }
 
-export async function getUserFromToken(req: Request, tenantId: string): Promise<UserContext | null> {
+export async function getUserFromToken(req: Request, tenantId?: string): Promise<UserContext | null> {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return null;
@@ -102,12 +102,17 @@ export async function getUserFromToken(req: Request, tenantId: string): Promise<
     
     if (userIdHeader) {
       const supabase = createSupabaseAdminClient();
-      const { data: userData, error: userError } = await supabase
+      let query = supabase
         .from('users')
         .select('*')
-        .eq('id', userIdHeader)
-        .eq('tenant_id', tenantId)
-        .single();
+        .eq('id', userIdHeader);
+      
+      // Only filter by tenant_id if provided
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+      
+      const { data: userData, error: userError } = await query.single();
 
       if (!userError && userData) {
         return {
@@ -132,12 +137,18 @@ export async function getUserFromToken(req: Request, tenantId: string): Promise<
       return null;
     }
 
-    const { data: userData, error: userError } = await supabase
+    const supabaseAdmin = createSupabaseAdminClient();
+    let query = supabaseAdmin
       .from('users')
       .select('*')
-      .eq('id', user.id)
-      .eq('tenant_id', tenantId)
-      .single();
+      .eq('id', user.id);
+      
+    // Only filter by tenant_id if provided
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+    
+    const { data: userData, error: userError } = await query.single();
 
     if (userError || !userData) {
       return null;
@@ -171,6 +182,11 @@ export async function validateRequest(req: Request): Promise<{
   }
 
   return { tenant, user };
+}
+
+// Alternative validation without tenant requirement (for super admin operations)
+export async function validateUserOnly(req: Request): Promise<UserContext | null> {
+  return await getUserFromToken(req);
 }
 
 export function requireAuth(roles?: string[]) {
@@ -223,4 +239,22 @@ export function formatDateTime(date: Date): string {
 
 export function parseDateTime(dateString: string): Date {
   return new Date(dateString);
+}
+
+export function createAuthenticatedClient(req: Request) {
+  const authHeader = req.headers.get('Authorization')
+
+  if (!authHeader) {
+    throw new Error('Missing Authorization header')
+  }
+
+  return createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    }
+  )
 }

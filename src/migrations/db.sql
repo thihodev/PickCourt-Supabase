@@ -147,8 +147,8 @@ CREATE TABLE public.sets (
 CREATE TABLE public.teams (
                               id uuid NOT NULL DEFAULT uuid_generate_v4(),
                               name character varying,
-                              player_one_id uuid NOT NULL,
-                              player_two_id uuid NOT NULL,
+                              player_one_id uuid,
+                              player_two_id uuid,
                               metadata jsonb DEFAULT '{}'::jsonb,
                               created_at timestamp with time zone DEFAULT now(),
                               updated_at timestamp with time zone DEFAULT now(),
