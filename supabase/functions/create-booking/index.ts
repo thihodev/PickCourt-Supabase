@@ -1,5 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createResponse, createErrorResponse, corsHeaders, createSupabaseAdminClient } from '../_shared/utils.ts'
+import {
+  createResponse,
+  createErrorResponse,
+  corsHeaders,
+  createSupabaseAdminClient,
+  createAuthenticatedClient
+} from '../_shared/utils.ts'
 import moment from 'npm:moment-timezone'
 
 interface CreateBookingRequest {
@@ -50,7 +56,12 @@ serve(async (req) => {
       return createErrorResponse('start_time must be in the future', 400)
     }
 
-    const supabase = createSupabaseAdminClient()
+    const supabase = createAuthenticatedClient(req)
+    const { data: user, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return createErrorResponse('Unauthorized', 401)
+    }
 
     // Verify court exists
     const { data: court, error: courtError } = await supabase
@@ -185,6 +196,7 @@ serve(async (req) => {
       end_time: endTime.toISOString(),
       status: 'scheduled',
       price: totalAmount,
+      expiry_at: moment().add(10, 'minutes').toISOString(),
       metadata: {
         booking_type: 'single',
         created_by: requestData.user_id

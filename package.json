@@ -27,7 +27,8 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
-    "@supabase/supabase-js": "^2.38.4"
+    "@supabase/supabase-js": "^2.38.4",
+    "@upstash/redis": "^1.25.1"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",

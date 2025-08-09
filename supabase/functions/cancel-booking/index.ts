@@ -7,6 +7,7 @@ import {
   createSupabaseAdminClient,
   createAuthenticatedClient
 } from '../_shared/utils.ts'
+import { UpstashBookedSlotService } from '../../../src/services/UpstashBookedSlotService.ts'
 
 interface CancelBookingRequest {
   booking_id: string
@@ -32,17 +33,28 @@ serve(async (req) => {
     }
 
 
-    const supabase = createAuthenticatedClient(req)
+    const supabase = createAuthenticatedClient()
     const { data: user, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
       return createErrorResponse('Unauthorized', 401)
     }
 
-    // Get booking with court and club info
+    const upstashService = new UpstashBookedSlotService()
+
+    // Get booking with booked slots and club info
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select()
+      .select(`
+        *,
+        booked_slots(
+          id,
+          court_id,
+          start_time,
+          end_time,
+          status
+        )
+      `)
       .eq('id', requestData.booking_id)
       .single()
 
@@ -126,6 +138,23 @@ serve(async (req) => {
 
     if (bookedSlotsError) {
       console.error('Error cancelling booked slots:', bookedSlotsError)
+    }
+
+    // Remove slots from Upstash Redis cache
+    try {
+      for (const slot of booking.booked_slots || []) {
+        const dateKey = new Date(slot.start_time).toISOString().split('T')[0]
+        await upstashService.removeBookedSlot(
+          booking.club_id,
+          dateKey,
+          slot.court_id,
+          slot.start_time,
+          slot.end_time
+        )
+      }
+    } catch (upstashError) {
+      console.error('Error removing slots from Upstash:', upstashError)
+      // Don't fail the entire operation if Upstash fails
     }
 
     // Cancel all matches for this booking

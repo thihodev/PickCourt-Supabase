@@ -13,6 +13,7 @@ CREATE TABLE public.booked_slots (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   match_id uuid,
+  expiry_at timestamp without time zone,
   CONSTRAINT booked_slots_pkey PRIMARY KEY (id),
   CONSTRAINT booked_slots_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
   CONSTRAINT booked_slots_court_id_fkey FOREIGN KEY (court_id) REFERENCES public.courts(id),
@@ -83,7 +84,6 @@ CREATE TABLE public.court_prices (
 );
 CREATE TABLE public.courts (
                                id uuid NOT NULL DEFAULT uuid_generate_v4(),
-                               tenant_id uuid NOT NULL,
                                name character varying NOT NULL,
                                type character varying DEFAULT 'badminton'::character varying,
                                status USER-DEFINED DEFAULT 'active'::court_status,
@@ -92,7 +92,6 @@ CREATE TABLE public.courts (
                                updated_at timestamp with time zone DEFAULT now(),
                                club_id uuid NOT NULL,
                                CONSTRAINT courts_pkey PRIMARY KEY (id),
-                               CONSTRAINT courts_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
                                CONSTRAINT courts_club_id_fkey FOREIGN KEY (club_id) REFERENCES public.clubs(id)
 );
 CREATE TABLE public.matches (

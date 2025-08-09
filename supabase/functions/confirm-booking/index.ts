@@ -1,5 +1,12 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createResponse, createErrorResponse, corsHeaders, createSupabaseAdminClient } from '../_shared/utils.ts'
+import {
+  createResponse,
+  createErrorResponse,
+  corsHeaders,
+  createSupabaseAdminClient,
+  createAuthenticatedClient
+} from '../_shared/utils.ts'
+import { UpstashBookedSlotService } from '../../../src/services/UpstashBookedSlotService.ts'
 
 interface ConfirmBookingRequest {
   booking_id: string
@@ -29,7 +36,13 @@ serve(async (req) => {
       return createErrorResponse('Missing required fields: booking_id, user_id', 400)
     }
 
-    const supabase = createSupabaseAdminClient()
+    const supabase = createAuthenticatedClient(req)
+    const { data: user, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return createErrorResponse('Unauthorized', 401)
+    }
+    const upstashService = new UpstashBookedSlotService()
 
     // 1. Get booking with booked_slots and club details
     const { data: booking, error: bookingError } = await supabase
@@ -111,6 +124,23 @@ serve(async (req) => {
     if (slotsUpdateError) {
       console.error('Error updating booked slots:', slotsUpdateError)
       return createErrorResponse('Failed to update booked slots', 400)
+    }
+
+    // 4.1. Add slots to Upstash Redis cache
+    try {
+      for (const slot of updatedSlots || []) {
+        const dateKey = new Date(slot.start_time).toISOString().split('T')[0]
+        await upstashService.addBookedSlot(booking.club_id, dateKey, {
+          courtId: slot.court_id,
+          startTime: slot.start_time,
+          endTime: slot.end_time,
+          bookingId: requestData.booking_id,
+          slotId: slot.id
+        })
+      }
+    } catch (upstashError) {
+      console.error('Error adding slots to Upstash:', upstashError)
+      // Don't fail the entire operation if Upstash fails
     }
 
     // 5. Create teams first for each booked slot
