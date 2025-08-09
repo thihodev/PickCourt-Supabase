@@ -121,25 +121,20 @@ serve(async (req) => {
       return createErrorResponse('Time slot is already booked', 409)
     }
 
-    // Calculate total amount using court_prices
+    // Calculate total amount using court_prices with detailed time slot handling
     const durationHours = moment.duration(endTime.diff(startTime)).asHours()
 
     // Get the day of week (0 = Sunday, 1 = Monday, etc.) - moment uses same format as JS Date
     const dayOfWeek = startTime.day()
 
-    // Get time in HH:MM format
-    const startTimeStr = startTime.tz(timezone).format('HH:mm')
-    const endTimeStr = endTime.tz(timezone).format('HH:mm')
 
-    // Find applicable price from court_prices table
+    // Get all price slots that might overlap with booking time
     const { data: courtPrices, error: priceError } = await supabase
       .from('court_prices')
       .select('price, start_time, end_time')
       .eq('court_id', requestData.court_id)
       .eq('day_of_week', dayOfWeek)
       .eq('is_active', true)
-      .lte('start_time', startTimeStr)
-      .gte('end_time', endTimeStr)
       .order('start_time')
 
     if (priceError) {
@@ -147,12 +142,53 @@ serve(async (req) => {
     }
 
     if (!courtPrices || courtPrices.length === 0) {
+      return createErrorResponse('No pricing available for the selected day', 400)
+    }
+
+    // Calculate total amount by checking each time segment
+    let totalAmount = 0
+    let applicablePrice = 0 // For metadata
+    const priceBreakdown = []
+
+    // Convert booking times to minutes for easier calculation
+    const bookingStartMinutes = startTime.tz(timezone).hours() * 60 + startTime.tz(timezone).minutes()
+    const bookingEndMinutes = endTime.tz(timezone).hours() * 60 + endTime.tz(timezone).minutes()
+
+    // Find overlapping price slots and calculate proportional cost
+    for (const priceSlot of courtPrices) {
+      const [slotStartHour, slotStartMin] = priceSlot.start_time.split(':').map(Number)
+      const [slotEndHour, slotEndMin] = priceSlot.end_time.split(':').map(Number)
+      
+      const slotStartMinutes = slotStartHour * 60 + slotStartMin
+      const slotEndMinutes = slotEndHour * 60 + slotEndMin
+
+      // Calculate overlap between booking time and price slot
+      const overlapStart = Math.max(bookingStartMinutes, slotStartMinutes)
+      const overlapEnd = Math.min(bookingEndMinutes, slotEndMinutes)
+
+      if (overlapStart < overlapEnd) {
+        const overlapMinutes = overlapEnd - overlapStart
+        const overlapHours = overlapMinutes / 60
+        const segmentCost = priceSlot.price * overlapHours
+
+        totalAmount += segmentCost
+        applicablePrice = priceSlot.price // Use last applicable price for metadata
+
+        priceBreakdown.push({
+          time_slot: `${priceSlot.start_time}-${priceSlot.end_time}`,
+          price_per_hour: priceSlot.price,
+          hours: overlapHours,
+          cost: segmentCost
+        })
+      }
+    }
+
+    // Check if entire booking time is covered by price slots
+    if (totalAmount === 0) {
       return createErrorResponse('No pricing available for the selected time slot', 400)
     }
 
-    // Use the first matching price (could be enhanced to handle overlapping time slots)
-    const applicablePrice = courtPrices[0].price
-    const totalAmount = Math.round(applicablePrice * durationHours)
+    totalAmount = Math.round(totalAmount)
 
     // Create booking with only club_id (no tenant_id)
     const bookingData = {
@@ -171,7 +207,8 @@ serve(async (req) => {
         court_name: court.name,
         club_name: court.club.name,
         hourly_rate: applicablePrice,
-        duration_hours: durationHours
+        duration_hours: durationHours,
+        price_breakdown: priceBreakdown  // Detailed price calculation breakdown
       }
     }
 

@@ -33,7 +33,7 @@ serve(async (req) => {
     }
 
 
-    const supabase = createAuthenticatedClient()
+    const supabase = createAuthenticatedClient(req)
     const { data: user, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
