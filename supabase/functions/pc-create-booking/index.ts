@@ -106,9 +106,12 @@ serve(async (req) => {
     }
 
     // Check for conflicting bookings via booked_slots
+    // Only consider confirmed slots or pending slots that haven't expired
+    const nowISO = moment().toISOString()
+    
     const { data: conflicts, error: conflictError } = await supabase
       .from('booked_slots')
-      .select('id, start_time, end_time')
+      .select('id, start_time, end_time, status, expiry_at')
       .eq('court_id', requestData.court_id)
       .neq('status', 'cancelled')
       .or(`and(start_time.lt.${endTime.toISOString()},end_time.gt.${startTime.toISOString()})`)
@@ -117,7 +120,18 @@ serve(async (req) => {
       return createErrorResponse(conflictError.message, 400)
     }
 
-    if (conflicts && conflicts.length > 0) {
+    // Filter out expired scheduled slots
+    const activeConflicts = conflicts?.filter((slot: any) => {
+      if (slot.status === 'confirmed') {
+        return true // Confirmed slots are always active
+      }
+      if (slot.status === 'scheduled') {
+        return slot.expiry_at && slot.expiry_at > nowISO // Only active if not expired
+      }
+      return false
+    }) || []
+
+    if (activeConflicts.length > 0) {
       return createErrorResponse('Time slot is already booked', 409)
     }
 
