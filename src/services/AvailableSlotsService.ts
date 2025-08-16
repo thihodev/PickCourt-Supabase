@@ -171,13 +171,13 @@ export class AvailableSlotsService {
       const allBookedSlots: any[] = []
       const dates = this.getDateRange(dateFrom, dateTo)
 
-      // Batch fetch all booked slots in parallel
+      // Batch fetch all slots (confirmed + pending) in parallel
       const promises: Promise<any[]>[] = []
       
       for (const clubId of clubIds) {
         for (const date of dates) {
-          const promise = this.upstashService.getBookedSlots(clubId, date)
-            .then(slots => slots.map(slot => ({ ...slot, clubId, date })))
+          const promise = this.upstashService.getAllSlots(clubId, date)
+            .then(({ all: slots }) => slots.map(slot => ({ ...slot, clubId, date })))
             .catch(error => {
               console.error(`Error fetching slots for ${clubId} on ${date}:`, error)
               return []

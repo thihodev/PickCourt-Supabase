@@ -70,6 +70,13 @@ serve(async (req) => {
       }
     })
 
+    // Remove reserved slots from cache first (if any)
+    await bookingService.removeAllReservedSlotsForBooking(
+      booking.club_id,
+      requestData.booking_id,
+      booking.start_time
+    )
+
     // Cancel all booked slots
     await bookingService.updateBookedSlotsStatus({
       bookingId: requestData.booking_id,
@@ -81,7 +88,7 @@ serve(async (req) => {
       }
     })
 
-    // Remove slots from Upstash Redis cache
+    // Remove confirmed slots from Upstash Redis cache
     await bookingService.removeSlotsFromUpstash(booking.club_id, booking.booked_slots || [])
 
     // Cancel all matches for this booking

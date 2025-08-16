@@ -76,13 +76,20 @@ serve(async (req) => {
       }
     })
 
+    // Remove reserved slots from cache first
+    await bookingService.removeAllReservedSlotsForBooking(
+      booking.club_id,
+      requestData.booking_id,
+      booking.start_time
+    )
+
     // Update booked_slots status to confirmed
     const updatedSlots = await bookingService.updateBookedSlotsStatus({
       bookingId: requestData.booking_id,
       status: 'confirmed'
     })
 
-    // Add slots to Upstash Redis cache
+    // Add confirmed slots to Upstash Redis cache
     await bookingService.addSlotsToUpstash(booking.club_id, updatedSlots, requestData.booking_id)
 
     // Create teams and matches for each booked slot

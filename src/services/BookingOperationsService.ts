@@ -178,6 +178,60 @@ export class BookingOperationsService {
     }
   }
 
+  async addReservedSlotToCache(
+    clubId: string,
+    courtId: string,
+    startTime: string,
+    endTime: string,
+    bookingId: string,
+    slotId: string,
+    expiryMinutes = 10
+  ): Promise<void> {
+    try {
+      const date = new Date(startTime).toISOString().split('T')[0]
+      await this.upstashService.addReservedSlot(clubId, date, {
+        courtId,
+        startTime,
+        endTime,
+        bookingId,
+        slotId,
+        status: 'reserved'
+      }, expiryMinutes)
+    } catch (error) {
+      console.error('Error adding reserved slot to cache:', error)
+      // Don't fail the entire operation if cache fails
+    }
+  }
+
+  async removeReservedSlotFromCache(
+    clubId: string,
+    courtId: string,
+    startTime: string,
+    endTime: string
+  ): Promise<void> {
+    try {
+      const date = new Date(startTime).toISOString().split('T')[0]
+      await this.upstashService.removeReservedSlot(clubId, date, courtId, startTime, endTime)
+    } catch (error) {
+      console.error('Error removing reserved slot from cache:', error)
+      // Don't fail the entire operation if cache fails
+    }
+  }
+
+  async removeAllReservedSlotsForBooking(
+    clubId: string,
+    bookingId: string,
+    startTime: string
+  ): Promise<void> {
+    try {
+      const date = new Date(startTime).toISOString().split('T')[0]
+      await this.upstashService.removeAllReservedSlotsForBooking(clubId, date, bookingId)
+    } catch (error) {
+      console.error('Error removing all reserved slots for booking:', error)
+      // Don't fail the entire operation if cache fails
+    }
+  }
+
   async getBookingWithDetails(bookingId: string): Promise<any> {
     const { data: booking, error } = await this.supabase
       .from('bookings')

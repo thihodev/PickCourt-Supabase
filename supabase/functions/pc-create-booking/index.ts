@@ -106,7 +106,7 @@ serve(async (req) => {
       }
     })
 
-    // Create booked slot
+    // Create booked slot in DB
     await bookingService.createBookedSlot({
       bookingId: booking.id,
       courtId: requestData.court_id,
@@ -117,6 +117,16 @@ serve(async (req) => {
         created_by: requestData.user_id
       }
     })
+
+    // Add reserved slot to cache (10 minutes hold)
+    await bookingService.addReservedSlotToCache(
+      court.club_id,
+      requestData.court_id,
+      requestData.start_time,
+      requestData.end_time,
+      booking.id,
+      `temp_${booking.id}` // Temporary slot ID
+    )
 
     // Return booking with court info
     const responseData = {

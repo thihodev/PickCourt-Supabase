@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from '../../supabase/functions/_shared/utils.ts'
+import { UpstashBookedSlotService } from './UpstashBookedSlotService.ts'
 import moment from 'npm:moment-timezone'
 
 export interface ValidateCourtInput {
@@ -19,6 +20,7 @@ export interface CheckConflictsInput {
 
 export class CourtValidationService {
   private supabase = createSupabaseAdminClient()
+  private upstashService = new UpstashBookedSlotService()
 
   async validateCourtExists(input: ValidateCourtInput): Promise<any> {
     const { courtId } = input
@@ -71,34 +73,30 @@ export class CourtValidationService {
   async checkConflicts(input: CheckConflictsInput): Promise<void> {
     const { courtId, startTime, endTime } = input
 
-    // Check for conflicting bookings via booked_slots
-    // Only consider confirmed slots or pending slots that haven't expired
-    const nowISO = moment().toISOString()
-    
-    const { data: conflicts, error } = await this.supabase
-      .from('booked_slots')
-      .select('id, start_time, end_time, status, expiry_at')
-      .eq('court_id', courtId)
-      .neq('status', 'cancelled')
-      .or(`and(start_time.lt.${endTime},end_time.gt.${startTime})`)
+    // Extract club_id and date from court for cache lookup
+    const { data: court, error: courtError } = await this.supabase
+      .from('courts')
+      .select('club_id')
+      .eq('id', courtId)
+      .single()
 
-    if (error) {
-      throw new Error(`Failed to check conflicts: ${error.message}`)
+    if (courtError || !court) {
+      throw new Error('Court not found')
     }
 
-    // Filter out expired scheduled slots
-    const activeConflicts = conflicts?.filter((slot: any) => {
-      if (slot.status === 'confirmed') {
-        return true // Confirmed slots are always active
-      }
-      if (slot.status === 'scheduled') {
-        return slot.expiry_at && slot.expiry_at > nowISO // Only active if not expired
-      }
-      return false
-    }) || []
+    const date = moment(startTime).format('YYYY-MM-DD')
+    
+    // Check conflicts in Upstash cache (both confirmed and pending slots)
+    const isAvailable = await this.upstashService.isSlotAvailable(
+      court.club_id,
+      date,
+      courtId,
+      startTime,
+      endTime
+    )
 
-    if (activeConflicts.length > 0) {
-      throw new Error('Time slot is already booked')
+    if (!isAvailable) {
+      throw new Error('Time slot is already booked or reserved')
     }
   }
 }
