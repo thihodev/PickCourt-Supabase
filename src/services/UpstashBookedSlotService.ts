@@ -63,7 +63,19 @@ export class UpstashBookedSlotService {
 
     if (!data) return []
 
-    return Object.values(data).map(slot => JSON.parse(slot as string))
+    return Object.values(data).map(slot => {
+      try {
+        // If slot is already an object, return it directly
+        if (typeof slot === 'object' && slot !== null) {
+          return slot as BookedSlotData
+        }
+        // If slot is a string, parse it
+        return JSON.parse(slot as string)
+      } catch (error) {
+        console.error('Error parsing slot data:', slot, error)
+        return null
+      }
+    }).filter(slot => slot !== null) as BookedSlotData[]
   }
 
   async isSlotBooked(
@@ -93,9 +105,18 @@ export class UpstashBookedSlotService {
     const fieldsToDelete: string[] = []
 
     for (const [field, slotJson] of Object.entries(allSlots)) {
-      const slot = JSON.parse(slotJson as string) as BookedSlotData
-      if (slot.bookingId === bookingId) {
-        fieldsToDelete.push(field)
+      try {
+        let slot: BookedSlotData
+        if (typeof slotJson === 'object' && slotJson !== null) {
+          slot = slotJson as BookedSlotData
+        } else {
+          slot = JSON.parse(slotJson as string) as BookedSlotData
+        }
+        if (slot.bookingId === bookingId) {
+          fieldsToDelete.push(field)
+        }
+      } catch (error) {
+        console.error('Error parsing slot data in removeAllSlotsForBooking:', slotJson, error)
       }
     }
 
@@ -115,7 +136,17 @@ export class UpstashBookedSlotService {
     if (!allSlots) return []
 
     return Object.values(allSlots)
-      .map(slot => JSON.parse(slot as string) as BookedSlotData)
-      .filter(slot => slot.bookingId === bookingId)
+      .map(slot => {
+        try {
+          if (typeof slot === 'object' && slot !== null) {
+            return slot as BookedSlotData
+          }
+          return JSON.parse(slot as string) as BookedSlotData
+        } catch (error) {
+          console.error('Error parsing slot data in getBookedSlotsByBooking:', slot, error)
+          return null
+        }
+      })
+      .filter(slot => slot !== null && slot.bookingId === bookingId) as BookedSlotData[]
   }
 }
