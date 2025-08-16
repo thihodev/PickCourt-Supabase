@@ -2,12 +2,11 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import {
   createResponse,
   createErrorResponse,
-  requireAuth,
   corsHeaders,
-  createSupabaseAdminClient,
   createAuthenticatedClient
 } from '../_shared/utils.ts'
-import { UpstashBookedSlotService } from '../../../src/services/UpstashBookedSlotService.ts'
+import { BookingOperationsService } from '../../../src/services/BookingOperationsService.ts'
+import { BookingCancellationService } from '../../../src/services/BookingCancellationService.ts'
 
 interface CancelBookingRequest {
   booking_id: string
@@ -32,7 +31,6 @@ serve(async (req) => {
       return createErrorResponse('Missing required field: booking_id', 400)
     }
 
-
     const supabase = createAuthenticatedClient(req)
     const { data: user, error: authError } = await supabase.auth.getUser()
 
@@ -40,169 +38,75 @@ serve(async (req) => {
       return createErrorResponse('Unauthorized', 401)
     }
 
-    const upstashService = new UpstashBookedSlotService()
+    // Initialize services
+    const bookingService = new BookingOperationsService()
+    const cancellationService = new BookingCancellationService()
 
-    // Get booking with booked slots and club info
-    const { data: booking, error: bookingError } = await supabase
-      .from('bookings')
-      .select(`
-        *,
-        booked_slots(
-          id,
-          court_id,
-          start_time,
-          end_time,
-          status
-        )
-      `)
-      .eq('id', requestData.booking_id)
-      .single()
+    // Get booking details
+    const booking = await bookingService.getBookingWithDetails(requestData.booking_id)
 
-    if (bookingError || !booking) {
-      console.log(bookingError);
-      return createErrorResponse('Booking not found', 404)
-    }
+    // Validate cancellation is allowed
+    await cancellationService.validateCancellation(booking)
 
-    // Check if booking can be cancelled
-    if (booking.status === 'cancelled') {
-      return createErrorResponse('Booking is already cancelled', 400)
-    }
-
-    if (booking.status === 'completed') {
-      return createErrorResponse('Cannot cancel a completed booking', 400)
-    }
-
-    // Check cancellation policy (example: can cancel up to 2 hours before)
-    const startTime = new Date(booking.start_time)
-    const now = new Date()
-    const timeDiffHours = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60)
-
-
-    // Determine refund amount
-    let refundAmount: number
-    if (requestData.refund_amount !== undefined) {
-      refundAmount = Math.max(0, Math.min(requestData.refund_amount, booking.total_amount))
-    } else {
-      // Auto-calculate refund based on policy
-      if (timeDiffHours >= 24) {
-        refundAmount = booking.total_amount // Full refund
-      } else if (timeDiffHours >= 2) {
-        refundAmount = Math.round(booking.total_amount * 0.5) // 50% refund
-      } else {
-        refundAmount = 0 // No refund
-      }
-    }
-
-    const now_iso = now.toISOString()
+    // Calculate refund
+    const refundResult = cancellationService.calculateRefund({
+      startTime: booking.start_time,
+      totalAmount: booking.total_amount,
+      customRefundAmount: requestData.refund_amount
+    })
 
     // Update booking status to cancelled
-    const updateData = {
+    const updatedBooking = await bookingService.updateBookingStatus({
+      bookingId: requestData.booking_id,
       status: 'cancelled',
-      updated_at: now_iso,
+      userId: user.id,
       metadata: {
         ...booking.metadata,
-        cancelled_at: now_iso,
         cancellation_reason: requestData.reason,
         cancellation_notes: requestData.notes,
-        refund_amount: refundAmount,
+        refund_amount: refundResult.refundAmount,
         original_amount: booking.total_amount,
-        time_before_start_hours: Math.round(timeDiffHours * 100) / 100
+        time_before_start_hours: refundResult.timeBeforeStartHours
       }
-    }
+    })
 
-    const { data: updatedBooking, error: updateError } = await supabase
-      .from('bookings')
-      .update(updateData)
-      .eq('id', requestData.booking_id)
-      .select()
-      .single()
-
-    if (updateError) {
-      return createErrorResponse(updateError.message, 400)
-    }
-
-    // Cancel all booked slots for this booking
-    const { error: bookedSlotsError } = await supabase
-      .from('booked_slots')
-      .update({
-        status: 'cancelled',
-        updated_at: now_iso,
-        metadata: {
-          cancelled_at: now_iso,
-          cancelled_by: user.id,
-          cancellation_reason: requestData.reason,
-          cancellation_notes: requestData.notes
-        }
-      })
-      .eq('booking_id', requestData.booking_id)
-
-    if (bookedSlotsError) {
-      console.error('Error cancelling booked slots:', bookedSlotsError)
-    }
+    // Cancel all booked slots
+    await bookingService.updateBookedSlotsStatus({
+      bookingId: requestData.booking_id,
+      status: 'cancelled',
+      metadata: {
+        cancelled_by: user.id,
+        cancellation_reason: requestData.reason,
+        cancellation_notes: requestData.notes
+      }
+    })
 
     // Remove slots from Upstash Redis cache
-    try {
-      for (const slot of booking.booked_slots || []) {
-        const dateKey = new Date(slot.start_time).toISOString().split('T')[0]
-        await upstashService.removeBookedSlot(
-          booking.club_id,
-          dateKey,
-          slot.court_id,
-          slot.start_time,
-          slot.end_time
-        )
-      }
-    } catch (upstashError) {
-      console.error('Error removing slots from Upstash:', upstashError)
-      // Don't fail the entire operation if Upstash fails
-    }
+    await bookingService.removeSlotsFromUpstash(booking.club_id, booking.booked_slots || [])
 
     // Cancel all matches for this booking
-    const { error: matchesError } = await supabase
-      .from('matches')
-      .update({
-        status: 'cancelled',
-        updated_at: now_iso,
-        metadata: {
-          cancelled_at: now_iso,
-          cancelled_by: user.id,
-          cancellation_reason: requestData.reason,
-          cancellation_notes: requestData.notes
-        }
-      })
-      .eq('booking_id', requestData.booking_id)
-
-    if (matchesError) {
-      console.error('Error cancelling matches:', matchesError)
-    }
+    await cancellationService.cancelMatches({
+      bookingId: requestData.booking_id,
+      userId: user.id,
+      reason: requestData.reason,
+      notes: requestData.notes
+    })
 
     // Create refund payment record if applicable
-    if (refundAmount > 0) {
-      const refundData = {
-        booking_id: requestData.booking_id,
-        amount: -refundAmount, // Negative amount for refund
-        payment_method: 'refund',
-        status: 'pending', // Admin needs to process refund
-        metadata: {
-          refund_for_cancellation: true,
-          cancelled_at: now_iso,
-          original_amount: booking.total_amount,
-          refund_reason: requestData.reason
-        }
-      }
+    await cancellationService.createRefundRecord({
+      bookingId: requestData.booking_id,
+      refundAmount: refundResult.refundAmount,
+      originalAmount: booking.total_amount,
+      reason: requestData.reason
+    })
 
-      await supabase
-        .from('payments')
-        .insert(refundData)
-    }
-
-    // Return cancelled booking with court info and refund details
+    // Return cancelled booking with refund details
     const responseData = {
       ...updatedBooking,
       refund_info: {
-        refund_amount: refundAmount,
-        refund_percentage: Math.round((refundAmount / booking.total_amount) * 100),
-        time_before_start_hours: Math.round(timeDiffHours * 100) / 100
+        refund_amount: refundResult.refundAmount,
+        refund_percentage: refundResult.refundPercentage,
+        time_before_start_hours: refundResult.timeBeforeStartHours
       }
     }
 
