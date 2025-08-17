@@ -1,0 +1,22 @@
+# Supabase Edge Function Cron Configuration
+# This will schedule the process-expired-bookings function to run every 10 minutes
+
+name: process-expired-bookings
+schedule: "*/10 * * * *"  # Every 10 minutes
+timezone: "Asia/Ho_Chi_Minh"
+
+# Request configuration
+method: POST
+headers:
+  Content-Type: application/json
+  
+# Optional: Add authentication if needed
+# authorization: Bearer YOUR_SERVICE_ROLE_KEY
+
+# Body payload (optional)
+body: |
+  {
+    "scheduled": true,
+    "trigger": "cron",
+    "timestamp": "{{ .Timestamp }}"
+  }
