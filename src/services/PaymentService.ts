@@ -8,6 +8,7 @@ export interface CreatePaymentInput {
   transactionId: string
   tenantId: string
   confirmedBy: string
+  isPayAtClub?: boolean
 }
 
 export class PaymentService {
@@ -20,7 +21,8 @@ export class PaymentService {
       paymentMethod,
       transactionId,
       tenantId,
-      confirmedBy
+      confirmedBy,
+      isPayAtClub = false
     } = input
 
     const paymentData: PaymentInsert = {
@@ -29,12 +31,13 @@ export class PaymentService {
       amount: amount,
       payment_method: paymentMethod,
       transaction_id: transactionId,
-      status: 'completed',
-      paid_at: new Date().toISOString(),
+      status: isPayAtClub ? 'unpaid' : 'paid',
+      paid_at: isPayAtClub ? undefined : new Date().toISOString(),
       metadata: {
         confirmed_with_booking: true,
         confirmed_by: confirmedBy,
-        confirmed_at: new Date().toISOString()
+        confirmed_at: new Date().toISOString(),
+        pay_at_club: isPayAtClub
       }
     }
 
@@ -67,14 +70,14 @@ export class PaymentService {
 
   async updatePaymentStatus(
     paymentId: string, 
-    status: 'pending' | 'completed' | 'failed' | 'refunded'
+    status: 'pending' | 'unpaid' | 'partially_paid' | 'paid' | 'refunded'
   ): Promise<void> {
     const updateData: any = {
       status,
       updated_at: new Date().toISOString()
     }
 
-    if (status === 'completed') {
+    if (status === 'paid') {
       updateData.paid_at = new Date().toISOString()
     }
 
@@ -99,8 +102,8 @@ export class PaymentService {
       throw new Error('Payment not found')
     }
 
-    if (payment.status !== 'completed') {
-      throw new Error('Can only refund completed payments')
+    if (payment.status !== 'paid') {
+      throw new Error('Can only refund paid payments')
     }
 
     const actualRefundAmount = refundAmount || payment.amount

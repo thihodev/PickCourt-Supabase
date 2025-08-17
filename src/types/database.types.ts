@@ -70,6 +70,7 @@ export interface Database {
           emergency_contact: string | null
           business_license: string | null
           tax_id: string | null
+          logo: string | null
         }
         Insert: {
           id?: string
@@ -139,68 +140,80 @@ export interface Database {
       users: {
         Row: {
           id: string
-          email: string
+          email: string | null
           profile: Json | null
-          role: 'customer' | 'staff' | 'admin'
+          role: 'super_admin' | 'tenant_admin' | 'customer'
           tenant_id: string | null
           is_super_admin: boolean
           created_at: string
           updated_at: string
+          phone: string | null
+          full_name: string | null
+          avatar_url: string | null
+          level: number
+          reliability: 'beginner' | 'intermediate' | 'advanced' | 'expert'
         }
         Insert: {
           id: string
-          email: string
+          email?: string | null
           profile?: Json | null
-          role?: 'customer' | 'staff' | 'admin'
+          role?: 'super_admin' | 'tenant_admin' | 'customer'
           tenant_id?: string | null
           is_super_admin?: boolean
           created_at?: string
           updated_at?: string
+          phone?: string | null
+          full_name?: string | null
+          avatar_url?: string | null
+          level?: number
+          reliability?: 'beginner' | 'amateur' | 'intermediate' | 'advanced' | 'professional' | 'certified'
         }
         Update: {
           id?: string
-          email?: string
+          email?: string | null
           profile?: Json | null
-          role?: 'customer' | 'staff' | 'admin'
+          role?: 'super_admin' | 'tenant_admin' | 'customer'
           tenant_id?: string | null
           is_super_admin?: boolean
           created_at?: string
           updated_at?: string
+          phone?: string | null
+          full_name?: string | null
+          avatar_url?: string | null
+          level?: number
+          reliability?: 'beginner' | 'amateur' | 'intermediate' | 'advanced' | 'professional' | 'certified'
         }
       }
       courts: {
         Row: {
           id: string
-          tenant_id: string
           name: string
           type: string
-          status: 'active' | 'inactive' | 'maintenance'
+          status: 'active' | 'maintenance' | 'inactive'
           settings: Json | null
           created_at: string
           updated_at: string
-          club_id: string | null
+          club_id: string
         }
         Insert: {
           id?: string
-          tenant_id: string
           name: string
           type?: string
-          status?: 'active' | 'inactive' | 'maintenance'
+          status?: 'active' | 'maintenance' | 'inactive'
           settings?: Json | null
           created_at?: string
           updated_at?: string
-          club_id?: string | null
+          club_id: string
         }
         Update: {
           id?: string
-          tenant_id?: string
           name?: string
           type?: string
-          status?: 'active' | 'inactive' | 'maintenance'
+          status?: 'active' | 'maintenance' | 'inactive'
           settings?: Json | null
           created_at?: string
           updated_at?: string
-          club_id?: string | null
+          club_id?: string
         }
       }
       court_prices: {
@@ -245,8 +258,8 @@ export interface Database {
           user_id: string
           start_time: string
           end_time: string
-          status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
-          booking_type: 'single' | 'recurring'
+          status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'expired'
+          booking_type: 'single' | 'recurring' | 'membership'
           total_amount: number
           metadata: Json | null
           created_at: string
@@ -258,8 +271,8 @@ export interface Database {
           user_id: string
           start_time: string
           end_time: string
-          status?: 'pending' | 'confirmed' | 'completed' | 'cancelled'
-          booking_type?: 'single' | 'recurring'
+          status?: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'expired'
+          booking_type?: 'single' | 'recurring' | 'membership'
           total_amount?: number
           metadata?: Json | null
           created_at?: string
@@ -271,8 +284,8 @@ export interface Database {
           user_id?: string
           start_time?: string
           end_time?: string
-          status?: 'pending' | 'confirmed' | 'completed' | 'cancelled'
-          booking_type?: 'single' | 'recurring'
+          status?: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'expired'
+          booking_type?: 'single' | 'recurring' | 'membership'
           total_amount?: number
           metadata?: Json | null
           created_at?: string
@@ -282,11 +295,12 @@ export interface Database {
       payments: {
         Row: {
           id: string
+          tenant_id: string
           booking_id: string
           amount: number
           payment_method: string
           transaction_id: string | null
-          status: 'pending' | 'completed' | 'failed' | 'refunded'
+          status: 'pending' | 'unpaid' | 'partially_paid' | 'paid' | 'refunded'
           metadata: Json | null
           paid_at: string | null
           created_at: string
@@ -294,11 +308,12 @@ export interface Database {
         }
         Insert: {
           id?: string
+          tenant_id: string
           booking_id: string
           amount: number
           payment_method: string
           transaction_id?: string | null
-          status?: 'pending' | 'completed' | 'failed' | 'refunded'
+          status?: 'pending' | 'unpaid' | 'partially_paid' | 'paid' | 'refunded'
           metadata?: Json | null
           paid_at?: string | null
           created_at?: string
@@ -306,11 +321,12 @@ export interface Database {
         }
         Update: {
           id?: string
+          tenant_id?: string
           booking_id?: string
           amount?: number
           payment_method?: string
           transaction_id?: string | null
-          status?: 'pending' | 'completed' | 'failed' | 'refunded'
+          status?: 'pending' | 'unpaid' | 'partially_paid' | 'paid' | 'refunded'
           metadata?: Json | null
           paid_at?: string | null
           created_at?: string
@@ -324,10 +340,11 @@ export interface Database {
           court_id: string
           start_time: string
           end_time: string
-          status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
+          status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'expired'
           price: number
           metadata: Json | null
           match_id: string | null
+          expiry_at: string | null
           created_at: string
           updated_at: string
         }
@@ -337,10 +354,11 @@ export interface Database {
           court_id: string
           start_time: string
           end_time: string
-          status?: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
+          status?: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'expired'
           price?: number
           metadata?: Json | null
           match_id?: string | null
+          expiry_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -350,10 +368,11 @@ export interface Database {
           court_id?: string
           start_time?: string
           end_time?: string
-          status?: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
+          status?: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'expired'
           price?: number
           metadata?: Json | null
           match_id?: string | null
+          expiry_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -361,7 +380,6 @@ export interface Database {
       teams: {
         Row: {
           id: string
-          tenant_id: string
           name: string | null
           player_one_id: string
           player_two_id: string
@@ -371,7 +389,6 @@ export interface Database {
         }
         Insert: {
           id?: string
-          tenant_id: string
           name?: string | null
           player_one_id: string
           player_two_id: string
@@ -381,7 +398,6 @@ export interface Database {
         }
         Update: {
           id?: string
-          tenant_id?: string
           name?: string | null
           player_one_id?: string
           player_two_id?: string
@@ -393,46 +409,49 @@ export interface Database {
       matches: {
         Row: {
           id: string
-          tenant_id: string
           booking_id: string
           team_one_id: string
           team_two_id: string
           status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'forfeit'
-          result: 'team_one_win' | 'team_two_win' | 'draw' | 'no_result' | null
+          result: 'team_one_win' | 'team_two_win' | 'no_result' | null
           match_date: string | null
           duration_minutes: number | null
           notes: string | null
           metadata: Json | null
+          type: string
+          is_open: boolean
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
-          tenant_id: string
           booking_id: string
           team_one_id: string
           team_two_id: string
           status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'forfeit'
-          result?: 'team_one_win' | 'team_two_win' | 'draw' | 'no_result' | null
+          result?: 'team_one_win' | 'team_two_win' | 'no_result' | null
           match_date?: string | null
           duration_minutes?: number | null
           notes?: string | null
           metadata?: Json | null
+          type?: string
+          is_open?: boolean
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          tenant_id?: string
           booking_id?: string
           team_one_id?: string
           team_two_id?: string
           status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'forfeit'
-          result?: 'team_one_win' | 'team_two_win' | 'draw' | 'no_result' | null
+          result?: 'team_one_win' | 'team_two_win' | 'no_result' | null
           match_date?: string | null
           duration_minutes?: number | null
           notes?: string | null
           metadata?: Json | null
+          type?: string
+          is_open?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -444,7 +463,6 @@ export interface Database {
           set_number: number
           team_one_score: number
           team_two_score: number
-          is_completed: boolean
           winner_team_id: string | null
           notes: string | null
           metadata: Json | null
@@ -457,7 +475,6 @@ export interface Database {
           set_number: number
           team_one_score?: number
           team_two_score?: number
-          is_completed?: boolean
           winner_team_id?: string | null
           notes?: string | null
           metadata?: Json | null
@@ -470,7 +487,6 @@ export interface Database {
           set_number?: number
           team_one_score?: number
           team_two_score?: number
-          is_completed?: boolean
           winner_team_id?: string | null
           notes?: string | null
           metadata?: Json | null
@@ -501,14 +517,15 @@ export interface Database {
       }
     }
     Enums: {
-      user_role: 'customer' | 'staff' | 'admin'
-      court_status: 'active' | 'inactive' | 'maintenance'
-      booking_status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
-      payment_status: 'pending' | 'completed' | 'failed' | 'refunded'
-      booking_type: 'single' | 'recurring'
-      booked_slot_status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
+      user_role: 'super_admin' | 'tenant_admin' | 'customer'
+      court_status: 'active' | 'maintenance' | 'inactive'
+      booking_status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'expired'
+      payment_status: 'pending' | 'unpaid' | 'partially_paid' | 'paid' | 'refunded'
+      booking_type: 'single' | 'recurring' | 'membership'
+      booked_slot_status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'expired'
       match_status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'forfeit'
-      match_result: 'team_one_win' | 'team_two_win' | 'draw' | 'no_result'
+      match_result: 'team_one_win' | 'team_two_win' | 'no_result'
+      reliability_level: 'beginner' | 'amateur' | 'intermediate' | 'advanced' | 'professional' | 'certified'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -525,6 +542,7 @@ export type BookingType = Database['public']['Enums']['booking_type']
 export type BookedSlotStatus = Database['public']['Enums']['booked_slot_status']
 export type MatchStatus = Database['public']['Enums']['match_status']
 export type MatchResult = Database['public']['Enums']['match_result']
+export type ReliabilityLevel = Database['public']['Enums']['reliability_level']
 
 export type Tenant = Database['public']['Tables']['tenants']['Row']
 export type TenantInsert = Database['public']['Tables']['tenants']['Insert']

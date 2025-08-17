@@ -55,9 +55,9 @@ export class CourtValidationService {
     const startTimeInClubTZ = moment(startTime).tz(timezone)
     const endTimeInClubTZ = moment(endTime).tz(timezone)
 
-    // Extract time parts (HH:MM format)
-    const startTimeStr = startTimeInClubTZ.format('HH:mm')
-    const endTimeStr = endTimeInClubTZ.format('HH:mm')
+    // Extract time parts (HH:MM:SS format to match database format)
+    const startTimeStr = startTimeInClubTZ.format('HH:mm:ss')
+    const endTimeStr = endTimeInClubTZ.format('HH:mm:ss')
 
     const openingTime = court.club.opening_time
     const closingTime = court.club.closing_time

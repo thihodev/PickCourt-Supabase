@@ -22,7 +22,6 @@ export class TeamService {
     const now = new Date().toISOString()
 
     const teamOneData: TeamInsert = {
-      tenant_id: tenantId,
       name: `Team 1 - ${courtName || 'Court'}`,
       player_one_id: customerId,
       player_two_id: customerId, // Temporary, will be updated later
@@ -36,7 +35,6 @@ export class TeamService {
     }
 
     const teamTwoData: TeamInsert = {
-      tenant_id: tenantId,
       name: `Team 2 - ${courtName || 'Court'}`,
       player_one_id: customerId, // Temporary, will be updated later
       player_two_id: customerId, // Temporary, will be updated later

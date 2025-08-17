@@ -106,8 +106,7 @@ serve(async (req) => {
         })
 
         // Create match for this slot
-        const match = await matchService.createMatch({
-          tenantId: booking.club?.tenant_id || '',
+        await matchService.createMatch({
           bookingId: requestData.booking_id,
           teamOneId: teams.teamOne.id,
           teamTwoId: teams.teamTwo.id,
@@ -129,22 +128,22 @@ serve(async (req) => {
     const paymentMethod = requestData.payment_method || 'pay_at_club'
     const isPayAtClub = paymentMethod === 'pay_at_club'
     
+    let createdPayment = null
     try {
-      await paymentService.createPayment({
+      createdPayment = await paymentService.createPayment({
         bookingId: requestData.booking_id,
         amount: booking.total_amount,
         paymentMethod: paymentMethod,
         transactionId: requestData.payment_reference || `booking_${requestData.booking_id}_${Date.now()}`,
         tenantId: booking.club?.tenant_id || '',
-        confirmedBy: requestData.user_id
+        confirmedBy: requestData.user_id,
+        isPayAtClub: isPayAtClub
       })
     } catch (error) {
       console.error('Error creating payment:', error)
       // Don't fail the entire operation if payment creation fails
     }
 
-    // Update booking payment status
-    await bookingService.updatePaymentStatus(requestData.booking_id, paymentMethod, isPayAtClub)
 
     // Return success response
     return createResponse({
@@ -152,7 +151,7 @@ serve(async (req) => {
       message: 'Booking confirmed successfully',
       matches_created: matchesCreated,
       payment_method: paymentMethod,
-      payment_status: isPayAtClub ? 'pending' : 'completed'
+      payment_status: createdPayment?.status || (isPayAtClub ? 'pending' : 'completed')
     })
 
   } catch (error) {

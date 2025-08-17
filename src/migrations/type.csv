@@ -1,0 +1,10 @@
+enum_name,enum_values
+booked_slot_status,"{scheduled,confirmed,completed,cancelled,no_show,expired}"
+booking_status,"{pending,confirmed,completed,cancelled,no_show,expired}"
+booking_type,"{single,recurring,membership}"
+court_status,"{active,maintenance,inactive}"
+match_result,"{team_one_win,team_two_win,no_result}"
+match_status,"{scheduled,in_progress,completed,cancelled,forfeit}"
+payment_status,"{pending,unpaid,partially_paid,paid,refunded}"
+reliability_level,"{beginner,amateur,intermediate,advanced,professional,certified}"
+user_role,"{super_admin,tenant_admin,customer}"

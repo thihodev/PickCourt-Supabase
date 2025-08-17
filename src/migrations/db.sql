@@ -66,6 +66,7 @@ CREATE TABLE public.clubs (
                               emergency_contact character varying,
                               business_license character varying,
                               tax_id character varying,
+                              logo character varying,
                               CONSTRAINT clubs_pkey PRIMARY KEY (id),
                               CONSTRAINT clubs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
 );
@@ -107,6 +108,8 @@ CREATE TABLE public.matches (
                                 metadata jsonb DEFAULT '{}'::jsonb,
                                 created_at timestamp with time zone DEFAULT now(),
                                 updated_at timestamp with time zone DEFAULT now(),
+                                type character varying DEFAULT 'friendly'::character varying,
+                                is_open boolean NOT NULL DEFAULT false,
                                 CONSTRAINT matches_pkey PRIMARY KEY (id),
                                 CONSTRAINT matches_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
                                 CONSTRAINT matches_team_one_id_fkey FOREIGN KEY (team_one_id) REFERENCES public.teams(id),
@@ -152,8 +155,8 @@ CREATE TABLE public.teams (
                               created_at timestamp with time zone DEFAULT now(),
                               updated_at timestamp with time zone DEFAULT now(),
                               CONSTRAINT teams_pkey PRIMARY KEY (id),
-                              CONSTRAINT teams_player_one_id_fkey FOREIGN KEY (player_one_id) REFERENCES public.users(id),
-                              CONSTRAINT teams_player_two_id_fkey FOREIGN KEY (player_two_id) REFERENCES public.users(id)
+                              CONSTRAINT teams_player_two_id_fkey FOREIGN KEY (player_two_id) REFERENCES public.users(id),
+                              CONSTRAINT teams_player_one_id_fkey FOREIGN KEY (player_one_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.tenants (
                                 id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -174,9 +177,12 @@ CREATE TABLE public.users (
                               is_super_admin boolean DEFAULT false,
                               created_at timestamp with time zone DEFAULT now(),
                               updated_at timestamp with time zone DEFAULT now(),
-                              phone integer,
+                              phone character varying,
                               full_name character varying,
+                              avatar_url character varying,
+                              level real NOT NULL DEFAULT '0.1'::real,
+                              reliability USER-DEFINED DEFAULT 'beginner'::reliability_level,
                               CONSTRAINT users_pkey PRIMARY KEY (id),
-                              CONSTRAINT users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
-                              CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+                              CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
+                              CONSTRAINT users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
 );

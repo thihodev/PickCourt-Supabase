@@ -23,7 +23,7 @@ export class BookingValidationService {
 
     // Check user permissions
     const isOwner = booking.user_id === userId
-    const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+    const isAdmin = userRole === 'tenant_admin' || userRole === 'super_admin'
     
     if (!isOwner && !isAdmin) {
       throw new Error('Insufficient permissions to confirm this booking')

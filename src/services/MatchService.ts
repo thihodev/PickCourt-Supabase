@@ -2,7 +2,6 @@ import { createSupabaseAdminClient } from '../../supabase/functions/_shared/util
 import type { MatchInsert, Match } from '../types/database.types.ts'
 
 export interface CreateMatchInput {
-  tenantId: string
   bookingId: string
   teamOneId: string
   teamTwoId: string
@@ -18,7 +17,6 @@ export class MatchService {
 
   async createMatch(input: CreateMatchInput): Promise<Match> {
     const {
-      tenantId,
       bookingId,
       teamOneId,
       teamTwoId,
@@ -30,7 +28,6 @@ export class MatchService {
     } = input
 
     const matchData: MatchInsert = {
-      tenant_id: tenantId,
       booking_id: bookingId,
       team_one_id: teamOneId,
       team_two_id: teamTwoId,
@@ -94,7 +91,7 @@ export class MatchService {
     return data
   }
 
-  async getMatchesByTenant(tenantId: string, filters?: {
+  async getMatchesByClub(clubId: string, filters?: {
     status?: string
     startDate?: string
     endDate?: string
@@ -106,14 +103,14 @@ export class MatchService {
         *,
         team_one:teams!team_one_id(*),
         team_two:teams!team_two_id(*),
-        booking:bookings(
+        booking:bookings!inner(
           id,
           start_time,
           end_time,
-          court:courts(id, name)
+          club_id
         )
       `)
-      .eq('tenant_id', tenantId)
+      .eq('booking.club_id', clubId)
 
     if (filters?.status) {
       query = query.eq('status', filters.status)

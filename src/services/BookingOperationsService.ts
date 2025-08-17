@@ -271,15 +271,4 @@ export class BookingOperationsService {
     return booking
   }
 
-  async updatePaymentStatus(bookingId: string, paymentMethod: string, isPayAtClub: boolean): Promise<void> {
-    const updateData = {
-      payment_status: isPayAtClub ? 'unpaid' : 'paid',
-      payment_method: paymentMethod
-    }
-
-    await this.supabase
-      .from('bookings')
-      .update(updateData)
-      .eq('id', bookingId)
-  }
 }
