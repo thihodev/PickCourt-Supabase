@@ -102,6 +102,8 @@ export class AvailableSlotsService {
           timezone,
           opening_time,
           closing_time,
+          allow_half_hour_slots,
+          prevent_orphan_30min,
           courts!inner(
             id,
             name,
@@ -271,7 +273,9 @@ export class AvailableSlotsService {
             timezone,
             bookedSlots,
             courtPrices,
-            court.id
+            court.id,
+            club.allow_half_hour_slots,
+            club.prevent_orphan_30min
           )
 
           if (timeSlots.length > 0) {
@@ -334,7 +338,9 @@ export class AvailableSlotsService {
     timezone: string,
     bookedSlots: any[],
     courtPrices: any[],
-    courtId: string
+    courtId: string,
+    allowHalfHourSlots: boolean = false,
+    preventOrphan30min: boolean = false
   ): TimeSlot[] {
     const timeSlots: TimeSlot[] = []
     
@@ -349,7 +355,19 @@ export class AvailableSlotsService {
 
     // If it's today, start from current time rounded up
     if (moment(date).isSame(currentTime, 'day')) {
-      const minutesToNextSlot = duration - (currentTime.minutes() % duration)
+      // For half-hour slots, round to next 30-minute mark, otherwise round to next hour
+      const slotIncrement = allowHalfHourSlots ? 30 : 60
+      const currentMinutes = currentTime.minutes()
+      
+      let minutesToNextSlot: number
+      if (allowHalfHourSlots) {
+        // Round to next 30-minute mark (00 or 30)
+        minutesToNextSlot = currentMinutes <= 30 ? 30 - currentMinutes : 60 - currentMinutes
+      } else {
+        // Round to next hour (00)
+        minutesToNextSlot = 60 - currentMinutes
+      }
+      
       const nextSlotTime = currentTime.clone()
         .add(minutesToNextSlot, 'minutes')
         .seconds(0)
@@ -360,29 +378,62 @@ export class AvailableSlotsService {
       }
     }
 
-    while (slotStart.clone().add(duration, 'minutes').isSameOrBefore(dayEnd)) {
-      const slotEnd = slotStart.clone().add(duration, 'minutes')
+    // Generate slots starting at both hour and half-hour marks if allowed
+    const startTimes: moment.Moment[] = []
+    const baseSlotStart = slotStart.clone()
+    
+    // Always generate hour-based slots (6:00, 7:00, 8:00, etc.)
+    let currentSlot = baseSlotStart.clone().minutes(0)
+    while (currentSlot.clone().add(duration, 'minutes').isSameOrBefore(dayEnd)) {
+      if (currentSlot.isSameOrAfter(slotStart)) {
+        startTimes.push(currentSlot.clone())
+      }
+      currentSlot.add(60, 'minutes')
+    }
+    
+    // If half-hour slots are allowed, also generate half-hour based slots (6:30, 7:30, 8:30, etc.)
+    if (allowHalfHourSlots) {
+      let halfHourSlot = baseSlotStart.clone().minutes(30)
+      while (halfHourSlot.clone().add(duration, 'minutes').isSameOrBefore(dayEnd)) {
+        if (halfHourSlot.isSameOrAfter(slotStart)) {
+          startTimes.push(halfHourSlot.clone())
+        }
+        halfHourSlot.add(60, 'minutes')
+      }
+    }
+    
+    // Sort all possible start times
+    startTimes.sort((a, b) => a.valueOf() - b.valueOf())
+    
+    // Check each possible slot
+    for (const slotStartTime of startTimes) {
+      const slotEndTime = slotStartTime.clone().add(duration, 'minutes')
       
       // Check conflicts
-      const isBooked = this.isSlotBooked(slotStart.toISOString(), slotEnd.toISOString(), bookedSlots, courtId)
+      const isBooked = this.isSlotBooked(slotStartTime.toISOString(), slotEndTime.toISOString(), bookedSlots, courtId)
 
       if (!isBooked) {
-        const price = this.calculateSlotPrice(
-          slotStart.format('HH:mm'),
-          slotEnd.format('HH:mm'),
-          courtPrices
+        // Check for orphan 30min gap if prevention is enabled
+        const hasOrphanGap = preventOrphan30min && this.wouldCreateOrphanGap(
+          slotStartTime, slotEndTime, dayEnd, bookedSlots, courtId, allowHalfHourSlots
         )
+        
+        if (!hasOrphanGap) {
+          const price = this.calculateSlotPrice(
+            slotStartTime.format('HH:mm'),
+            slotEndTime.format('HH:mm'),
+            courtPrices
+          )
 
-        if (price > 0) {
-          timeSlots.push({
-            startTime: slotStart.toISOString(),
-            endTime: slotEnd.toISOString(),
-            price
-          })
+          if (price > 0) {
+            timeSlots.push({
+              startTime: slotStartTime.toISOString(),
+              endTime: slotEndTime.toISOString(),
+              price
+            })
+          }
         }
       }
-
-      slotStart.add(duration, 'minutes').seconds(0).milliseconds(0)
     }
 
     return timeSlots
@@ -425,5 +476,40 @@ export class AvailableSlotsService {
   private timeToMinutes(timeString: string): number {
     const [hours, minutes] = timeString.split(':').map(Number)
     return hours * 60 + minutes
+  }
+
+  private wouldCreateOrphanGap(
+    slotStart: moment.Moment,
+    slotEnd: moment.Moment,
+    dayEnd: moment.Moment,
+    bookedSlots: any[],
+    courtId: string,
+    allowHalfHourSlots: boolean
+  ): boolean {
+    // Check if booking this slot would leave a 30-minute gap that's too small to book
+    const gapAfterSlot = this.findNextBookedSlot(slotEnd, bookedSlots, courtId)
+    
+    if (!gapAfterSlot) {
+      // No booking after this slot, check gap to day end
+      const gapToDayEnd = dayEnd.diff(slotEnd, 'minutes')
+      // If gap is exactly 30 minutes and half-hour slots are not allowed, it's an orphan
+      return gapToDayEnd === 30 && !allowHalfHourSlots
+    }
+    
+    const gapDuration = moment(gapAfterSlot.startTime).diff(slotEnd, 'minutes')
+    
+    // If gap is exactly 30 minutes and half-hour slots are not allowed, it's an orphan
+    return gapDuration === 30 && !allowHalfHourSlots
+  }
+
+  private findNextBookedSlot(afterTime: moment.Moment, bookedSlots: any[], courtId: string): any | null {
+    const nextSlots = bookedSlots
+      .filter(slot => 
+        slot.courtId === courtId && 
+        moment(slot.startTime).isAfter(afterTime)
+      )
+      .sort((a, b) => moment(a.startTime).valueOf() - moment(b.startTime).valueOf())
+    
+    return nextSlots.length > 0 ? nextSlots[0] : null
   }
 }

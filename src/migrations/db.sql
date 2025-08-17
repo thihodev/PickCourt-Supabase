@@ -67,6 +67,8 @@ CREATE TABLE public.clubs (
                               business_license character varying,
                               tax_id character varying,
                               logo character varying,
+                              allow_half_hour_slots boolean NOT NULL DEFAULT false,
+                              prevent_orphan_30min boolean NOT NULL DEFAULT false,
                               CONSTRAINT clubs_pkey PRIMARY KEY (id),
                               CONSTRAINT clubs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
 );
@@ -111,9 +113,9 @@ CREATE TABLE public.matches (
                                 type character varying DEFAULT 'friendly'::character varying,
                                 is_open boolean NOT NULL DEFAULT false,
                                 CONSTRAINT matches_pkey PRIMARY KEY (id),
-                                CONSTRAINT matches_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
                                 CONSTRAINT matches_team_one_id_fkey FOREIGN KEY (team_one_id) REFERENCES public.teams(id),
-                                CONSTRAINT matches_team_two_id_fkey FOREIGN KEY (team_two_id) REFERENCES public.teams(id)
+                                CONSTRAINT matches_team_two_id_fkey FOREIGN KEY (team_two_id) REFERENCES public.teams(id),
+                                CONSTRAINT matches_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.payments (
                                  id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -128,8 +130,8 @@ CREATE TABLE public.payments (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT payments_pkey PRIMARY KEY (id),
-  CONSTRAINT payments_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
-  CONSTRAINT payments_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
+  CONSTRAINT payments_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
+  CONSTRAINT payments_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
 );
 CREATE TABLE public.sets (
                              id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -143,8 +145,8 @@ CREATE TABLE public.sets (
                              created_at timestamp with time zone DEFAULT now(),
                              updated_at timestamp with time zone DEFAULT now(),
                              CONSTRAINT sets_pkey PRIMARY KEY (id),
-                             CONSTRAINT sets_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
-                             CONSTRAINT sets_winner_team_id_fkey FOREIGN KEY (winner_team_id) REFERENCES public.teams(id)
+                             CONSTRAINT sets_winner_team_id_fkey FOREIGN KEY (winner_team_id) REFERENCES public.teams(id),
+                             CONSTRAINT sets_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id)
 );
 CREATE TABLE public.teams (
                               id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -155,8 +157,8 @@ CREATE TABLE public.teams (
                               created_at timestamp with time zone DEFAULT now(),
                               updated_at timestamp with time zone DEFAULT now(),
                               CONSTRAINT teams_pkey PRIMARY KEY (id),
-                              CONSTRAINT teams_player_two_id_fkey FOREIGN KEY (player_two_id) REFERENCES public.users(id),
-                              CONSTRAINT teams_player_one_id_fkey FOREIGN KEY (player_one_id) REFERENCES public.users(id)
+                              CONSTRAINT teams_player_one_id_fkey FOREIGN KEY (player_one_id) REFERENCES public.users(id),
+                              CONSTRAINT teams_player_two_id_fkey FOREIGN KEY (player_two_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.tenants (
                                 id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -183,6 +185,6 @@ CREATE TABLE public.users (
                               level real NOT NULL DEFAULT '0.1'::real,
                               reliability USER-DEFINED DEFAULT 'beginner'::reliability_level,
                               CONSTRAINT users_pkey PRIMARY KEY (id),
-                              CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
-                              CONSTRAINT users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+                              CONSTRAINT users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+                              CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );

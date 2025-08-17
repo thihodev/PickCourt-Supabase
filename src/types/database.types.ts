@@ -71,6 +71,8 @@ export interface Database {
           business_license: string | null
           tax_id: string | null
           logo: string | null
+          allow_half_hour_slots: boolean
+          prevent_orphan_30min: boolean
         }
         Insert: {
           id?: string
@@ -103,6 +105,9 @@ export interface Database {
           emergency_contact?: string | null
           business_license?: string | null
           tax_id?: string | null
+          logo?: string | null
+          allow_half_hour_slots?: boolean
+          prevent_orphan_30min?: boolean
         }
         Update: {
           id?: string
@@ -135,6 +140,9 @@ export interface Database {
           emergency_contact?: string | null
           business_license?: string | null
           tax_id?: string | null
+          logo?: string | null
+          allow_half_hour_slots?: boolean
+          prevent_orphan_30min?: boolean
         }
       }
       users: {

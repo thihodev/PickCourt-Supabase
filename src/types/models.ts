@@ -59,6 +59,9 @@ export interface Club {
   emergency_contact?: string;
   business_license?: string;
   tax_id?: string;
+  logo?: string;
+  allow_half_hour_slots: boolean;
+  prevent_orphan_30min: boolean;
 }
 
 export interface Court {
