@@ -128,13 +128,11 @@ export class ExpiredBookingService {
       .update({
         status: 'expired',
         updated_at: now,
-        metadata: this.supabase.sql`
-          COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
-            'expired_at', ${now},
-            'expired_reason', 'payment_timeout',
-            'original_expiry_slots', ${JSON.stringify(expiredSlots.length)}
-          )
-        `
+        metadata: {
+          expired_at: now,
+          expired_reason: 'payment_timeout',
+          original_expiry_slots: expiredSlots.length
+        }
       })
       .in('id', uniqueBookingIds)
       .eq('status', 'pending')
