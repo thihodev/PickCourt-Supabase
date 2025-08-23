@@ -34,8 +34,8 @@ serve(async (req) => {
     const requestData: ConfirmBookingRequest = await req.json()
 
     // Basic validation
-    if (!requestData.booking_id || !requestData.user_id) {
-      return createErrorResponse('Missing required fields: booking_id, user_id', 400)
+    if (!requestData.booking_id) {
+      return createErrorResponse('Missing required fields: booking_id', 400)
     }
 
     const supabase = createAuthenticatedClient(req)
@@ -111,44 +111,48 @@ serve(async (req) => {
     // Add confirmed slots to Upstash Redis cache
     await bookingService.addSlotsToUpstash(booking.club_id, updatedSlots, requestData.booking_id)
 
-    // Create teams and matches for each booked slot
+    // Create teams and matches for each booked slot (only for bookings with user_id)
     let matchesCreated = 0
     let teamsCreated = 0
-    try {
-      for (const slot of updatedSlots) {
-        // Create teams for this specific slot (each slot gets its own match)
-        const teams = await teamService.createTeamsForBooking({
-          tenantId: booking.club?.tenant_id || '',
-          bookingId: requestData.booking_id,
-          courtName: `${booking.metadata?.court_name || 'Court'} - ${new Date(slot.start_time).toLocaleDateString()}`,
-          customerId: booking.user_id,
-          createdBy: requestData.user_id
-        })
+    if (booking.user_id) {
+      try {
+        for (const slot of updatedSlots) {
+          // Create teams for this specific slot (each slot gets its own match)
+          const teams = await teamService.createTeamsForBooking({
+            tenantId: booking.club?.tenant_id || '',
+            bookingId: requestData.booking_id,
+            courtName: `${booking.metadata?.court_name || 'Court'} - ${new Date(slot.start_time).toLocaleDateString()}`,
+            customerId: booking.user_id,
+            createdBy: requestData.user_id
+          })
 
-        // Create match for this specific slot
-        const createdMatch = await matchService.createMatch({
-          bookingId: requestData.booking_id,
-          teamOneId: teams.teamOne.id,
-          teamTwoId: teams.teamTwo.id,
-          matchDate: slot.start_time,
-          courtId: slot.court_id,
-          courtName: booking.metadata?.court_name || '',
-          clubName: booking.metadata?.club_name || '',
-          createdBy: requestData.user_id
-        })
+          // Create match for this specific slot
+          const createdMatch = await matchService.createMatch({
+            bookingId: requestData.booking_id,
+            teamOneId: teams.teamOne.id,
+            teamTwoId: teams.teamTwo.id,
+            matchDate: slot.start_time,
+            courtId: slot.court_id,
+            courtName: booking.metadata?.court_name || '',
+            clubName: booking.metadata?.club_name || '',
+            createdBy: requestData.user_id
+          })
 
-        // Update the booked_slot with the match_id
-        await supabase
-          .from('booked_slots')
-          .update({ match_id: createdMatch.id })
-          .eq('id', slot.id)
+          // Update the booked_slot with the match_id
+          await supabase
+            .from('booked_slots')
+            .update({ match_id: createdMatch.id })
+            .eq('id', slot.id)
 
-        matchesCreated++
-        teamsCreated += 2 // Two teams per match
+          matchesCreated++
+          teamsCreated += 2 // Two teams per match
+        }
+      } catch (error) {
+        console.error('Error creating teams/matches:', error)
+        // Don't fail the entire operation if teams/matches creation fails
       }
-    } catch (error) {
-      console.error('Error creating teams/matches:', error)
-      // Don't fail the entire operation if teams/matches creation fails
+    } else {
+      console.log('Skipping match creation for guest booking (no user_id)')
     }
 
     // Create payment record (default to pay_at_club)
@@ -163,7 +167,7 @@ serve(async (req) => {
         paymentMethod: paymentMethod,
         transactionId: requestData.payment_reference || `booking_${requestData.booking_id}_${Date.now()}`,
         tenantId: booking.club?.tenant_id || '',
-        confirmedBy: requestData.user_id,
+        confirmedBy: user.id,
         isPayAtClub: isPayAtClub
       })
     } catch (error) {

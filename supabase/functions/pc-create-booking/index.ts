@@ -13,7 +13,7 @@ import { RecurringBookingService } from '../../../src/services/RecurringBookingS
 
 interface CreateBookingRequest {
   court_id: string
-  user_id: string   // Required in payload
+  user_id?: string   // Optional for guest bookings
   start_time: string // ISO timestamp
   end_time: string   // ISO timestamp
   notes?: string
@@ -52,8 +52,8 @@ serve(async (req) => {
     const recurringService = new RecurringBookingService()
 
     // Validate required fields
-    if (!requestData.court_id || !requestData.user_id || !requestData.start_time || !requestData.end_time) {
-      return createErrorResponse('Missing required fields: court_id, user_id, start_time, end_time', 400)
+    if (!requestData.court_id || !requestData.start_time || !requestData.end_time) {
+      return createErrorResponse('Missing required fields: court_id, start_time, end_time', 400)
     }
 
     // Validate recurring config if provided
@@ -75,7 +75,6 @@ serve(async (req) => {
       courtId: requestData.court_id,
       startTime: requestData.start_time,
       endTime: requestData.end_time,
-      userId: requestData.user_id
     })
 
     const supabase = createAuthenticatedClient(req)
@@ -161,7 +160,7 @@ serve(async (req) => {
     // Create booking
     const booking = await bookingService.createBooking({
       clubId: court.club_id,
-      userId: requestData.user_id,
+      userId: requestData.user_id || null, // null for guest bookings
       startTime: requestData.start_time,
       endTime: requestData.end_time,
       totalAmount: totalAmount,
@@ -169,11 +168,11 @@ serve(async (req) => {
       recurringConfig: requestData.recurring_config,
       metadata: {
         notes: requestData.notes,
-        customer_info: requestData.customer_info,
         court_id: requestData.court_id,
         court_name: court.name,
         club_name: court.club.name,
-        slots_count: slots.length
+        slots_count: slots.length,
+        is_guest_booking: !requestData.user_id
       }
     })
 
@@ -183,8 +182,9 @@ serve(async (req) => {
       courtId: requestData.court_id,
       slots: slots,
       metadata: {
-        created_by: requestData.user_id,
-        booking_type: bookingType
+        created_by: requestData.user_id || 'guest',
+        booking_type: bookingType,
+        is_guest_booking: !requestData.user_id
       }
     })
 

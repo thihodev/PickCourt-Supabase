@@ -75,7 +75,6 @@ export class BookingValidationService {
     courtId: string
     startTime: string
     endTime: string
-    userId: string
   }): void {
     const { startTime, endTime } = input
 
