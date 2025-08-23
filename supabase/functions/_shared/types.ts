@@ -101,6 +101,7 @@ export interface Database {
           metadata?: Record<string, any>;
           created_at: string;
           updated_at: string;
+          recurring_config?: Record<string, any>;
         };
         Insert: {
           id?: string;
@@ -115,6 +116,7 @@ export interface Database {
           metadata?: Record<string, any>;
           created_at?: string;
           updated_at?: string;
+          recurring_config?: Record<string, any>;
         };
         Update: {
           court_id?: string;
@@ -126,6 +128,7 @@ export interface Database {
           total_amount?: number;
           metadata?: Record<string, any>;
           updated_at?: string;
+          recurring_config?: Record<string, any>;
         };
       };
       products: {

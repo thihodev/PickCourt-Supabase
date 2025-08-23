@@ -76,12 +76,31 @@ serve(async (req) => {
       }
     })
 
-    // Remove reserved slots from cache first
-    await bookingService.removeAllReservedSlotsForBooking(
-      booking.club_id,
-      requestData.booking_id,
-      booking.start_time
-    )
+    // Remove reserved slots from cache - handle both single and recurring bookings
+    if (booking.booking_type === 'recurring') {
+      // For recurring bookings, we need to remove reserved slots for all dates
+      const { data: bookedSlots } = await supabase
+        .from('booked_slots')
+        .select('start_time')
+        .eq('booking_id', requestData.booking_id)
+      
+      if (bookedSlots) {
+        for (const slot of bookedSlots) {
+          await bookingService.removeAllReservedSlotsForBooking(
+            booking.club_id,
+            requestData.booking_id,
+            slot.start_time
+          )
+        }
+      }
+    } else {
+      // Single booking - original logic
+      await bookingService.removeAllReservedSlotsForBooking(
+        booking.club_id,
+        requestData.booking_id,
+        booking.start_time
+      )
+    }
 
     // Update booked_slots status to confirmed
     const updatedSlots = await bookingService.updateBookedSlotsStatus({
@@ -94,19 +113,20 @@ serve(async (req) => {
 
     // Create teams and matches for each booked slot
     let matchesCreated = 0
+    let teamsCreated = 0
     try {
       for (const slot of updatedSlots) {
-        // Create teams for this slot
+        // Create teams for this specific slot (each slot gets its own match)
         const teams = await teamService.createTeamsForBooking({
           tenantId: booking.club?.tenant_id || '',
           bookingId: requestData.booking_id,
-          courtName: booking.metadata?.court_name || '',
+          courtName: `${booking.metadata?.court_name || 'Court'} - ${new Date(slot.start_time).toLocaleDateString()}`,
           customerId: booking.user_id,
           createdBy: requestData.user_id
         })
 
-        // Create match for this slot
-        await matchService.createMatch({
+        // Create match for this specific slot
+        const createdMatch = await matchService.createMatch({
           bookingId: requestData.booking_id,
           teamOneId: teams.teamOne.id,
           teamTwoId: teams.teamTwo.id,
@@ -117,7 +137,14 @@ serve(async (req) => {
           createdBy: requestData.user_id
         })
 
+        // Update the booked_slot with the match_id
+        await supabase
+          .from('booked_slots')
+          .update({ match_id: createdMatch.id })
+          .eq('id', slot.id)
+
         matchesCreated++
+        teamsCreated += 2 // Two teams per match
       }
     } catch (error) {
       console.error('Error creating teams/matches:', error)
@@ -148,10 +175,20 @@ serve(async (req) => {
     // Return success response
     return createResponse({
       ...updatedBooking,
-      message: 'Booking confirmed successfully',
+      message: `${booking.booking_type === 'recurring' ? 'Recurring booking' : 'Booking'} confirmed successfully`,
       matches_created: matchesCreated,
+      teams_created: teamsCreated,
+      slots_processed: updatedSlots.length,
+      booking_type: booking.booking_type,
       payment_method: paymentMethod,
-      payment_status: createdPayment?.status || (isPayAtClub ? 'pending' : 'completed')
+      payment_status: createdPayment?.status || (isPayAtClub ? 'pending' : 'completed'),
+      slots_summary: updatedSlots.map(slot => ({
+        slot_id: slot.id,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        price: slot.price,
+        status: slot.status
+      }))
     })
 
   } catch (error) {

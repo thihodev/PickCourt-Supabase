@@ -21,6 +21,8 @@ export interface CreateBookingInput {
   startTime: string
   endTime: string
   totalAmount: number
+  bookingType?: 'single' | 'recurring'
+  recurringConfig?: Record<string, any>
   metadata?: Record<string, any>
 }
 
@@ -29,7 +31,19 @@ export interface CreateBookedSlotInput {
   courtId: string
   startTime: string
   endTime: string
-  totalAmount: number
+  price: number
+  expiryMinutes?: number
+  metadata?: Record<string, any>
+}
+
+export interface CreateMultipleSlotsInput {
+  bookingId: string
+  courtId: string
+  slots: Array<{
+    startTime: string
+    endTime: string
+    price: number
+  }>
   expiryMinutes?: number
   metadata?: Record<string, any>
 }
@@ -122,16 +136,26 @@ export class BookingOperationsService {
   }
 
   async createBooking(input: CreateBookingInput): Promise<any> {
-    const { clubId, userId, startTime, endTime, totalAmount, metadata } = input
+    const { 
+      clubId, 
+      userId, 
+      startTime, 
+      endTime, 
+      totalAmount, 
+      bookingType = 'single',
+      recurringConfig,
+      metadata 
+    } = input
 
     const bookingData = {
       club_id: clubId,
       user_id: userId,
       start_time: startTime,
       end_time: endTime,
-      booking_type: 'single',
+      booking_type: bookingType,
       total_amount: totalAmount,
       status: 'pending',
+      recurring_config: recurringConfig || {},
       metadata: {
         ...metadata,
         created_by: userId
@@ -152,7 +176,7 @@ export class BookingOperationsService {
   }
 
   async createBookedSlot(input: CreateBookedSlotInput): Promise<void> {
-    const { bookingId, courtId, startTime, endTime, totalAmount, expiryMinutes = 10, metadata } = input
+    const { bookingId, courtId, startTime, endTime, price, expiryMinutes = 10, metadata } = input
 
     const bookedSlotData = {
       booking_id: bookingId,
@@ -160,10 +184,9 @@ export class BookingOperationsService {
       start_time: startTime,
       end_time: endTime,
       status: 'scheduled',
-      price: totalAmount,
+      price: price,
       expiry_at: new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString(),
       metadata: {
-        booking_type: 'single',
         ...metadata
       }
     }
@@ -173,8 +196,32 @@ export class BookingOperationsService {
       .insert(bookedSlotData)
 
     if (error) {
-      console.error('Error creating booked slot:', error)
-      // Don't fail the entire operation if slot creation fails
+      throw new Error(`Failed to create booked slot: ${error.message}`)
+    }
+  }
+
+  async createMultipleBookedSlots(input: CreateMultipleSlotsInput): Promise<void> {
+    const { bookingId, courtId, slots, expiryMinutes = 10, metadata } = input
+
+    const bookedSlotsData = slots.map(slot => ({
+      booking_id: bookingId,
+      court_id: courtId,
+      start_time: slot.startTime,
+      end_time: slot.endTime,
+      status: 'scheduled',
+      price: slot.price,
+      expiry_at: new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString(),
+      metadata: {
+        ...metadata
+      }
+    }))
+
+    const { error } = await this.supabase
+      .from('booked_slots')
+      .insert(bookedSlotsData)
+
+    if (error) {
+      throw new Error(`Failed to create booked slots: ${error.message}`)
     }
   }
 
@@ -199,6 +246,37 @@ export class BookingOperationsService {
       }, expiryMinutes)
     } catch (error) {
       console.error('Error adding reserved slot to cache:', error)
+      // Don't fail the entire operation if cache fails
+    }
+  }
+
+  async addMultipleReservedSlotsToCache(
+    clubId: string,
+    courtId: string,
+    slots: Array<{
+      startTime: string
+      endTime: string
+      price: number
+    }>,
+    bookingId: string,
+    expiryMinutes = 10
+  ): Promise<void> {
+    try {
+      for (let i = 0; i < slots.length; i++) {
+        const slot = slots[i]
+        const slotId = `temp_${bookingId}_${i}`
+        await this.addReservedSlotToCache(
+          clubId,
+          courtId,
+          slot.startTime,
+          slot.endTime,
+          bookingId,
+          slotId,
+          expiryMinutes
+        )
+      }
+    } catch (error) {
+      console.error('Error adding multiple reserved slots to cache:', error)
       // Don't fail the entire operation if cache fails
     }
   }

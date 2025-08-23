@@ -272,6 +272,7 @@ export interface Database {
           metadata: Json | null
           created_at: string
           updated_at: string
+          recurring_config: Json | null
         }
         Insert: {
           id?: string
@@ -285,6 +286,7 @@ export interface Database {
           metadata?: Json | null
           created_at?: string
           updated_at?: string
+          recurring_config?: Json | null
         }
         Update: {
           id?: string
@@ -298,6 +300,7 @@ export interface Database {
           metadata?: Json | null
           created_at?: string
           updated_at?: string
+          recurring_config?: Json | null
         }
       }
       payments: {
