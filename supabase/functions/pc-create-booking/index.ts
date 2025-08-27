@@ -168,6 +168,7 @@ serve(async (req) => {
       recurringConfig: requestData.recurring_config,
       metadata: {
         notes: requestData.notes,
+        customer_info: requestData.customer_info,
         court_id: requestData.court_id,
         court_name: court.name,
         club_name: court.club.name,
