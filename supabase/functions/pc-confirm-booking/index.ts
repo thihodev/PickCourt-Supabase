@@ -59,7 +59,7 @@ serve(async (req) => {
     validationService.validateBookingForConfirmation({
       booking,
       userId: requestData.user_id,
-      userRole: 'user',
+      userRole: 'tenant_admin',
       tenantId: booking.club?.tenant_id || ''
     })
 
@@ -111,10 +111,10 @@ serve(async (req) => {
     // Add confirmed slots to Upstash Redis cache
     await bookingService.addSlotsToUpstash(booking.club_id, updatedSlots, requestData.booking_id)
 
-    // Create teams and matches for each booked slot (only for bookings with user_id)
+    // Create teams and matches for each booked slot (only for user bookings, not guest bookings)
     let matchesCreated = 0
     let teamsCreated = 0
-    if (booking.user_id) {
+    if (booking.user_id && !booking.guest_id) {
       try {
         for (const slot of updatedSlots) {
           // Create teams for this specific slot (each slot gets its own match)
@@ -152,7 +152,7 @@ serve(async (req) => {
         // Don't fail the entire operation if teams/matches creation fails
       }
     } else {
-      console.log('Skipping match creation for guest booking (no user_id)')
+      console.log('Skipping match creation for guest booking (guest_id present or no user_id)')
     }
 
     // Create payment record (default to pay_at_club)

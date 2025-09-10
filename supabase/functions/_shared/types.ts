@@ -90,9 +90,9 @@ export interface Database {
       bookings: {
         Row: {
           id: string;
-          tenant_id: string;
-          court_id: string;
-          user_id: string;
+          club_id: string;
+          user_id?: string;
+          guest_id?: string;
           start_time: string;
           end_time: string;
           status: 'pending' | 'confirmed' | 'cancelled';
@@ -105,9 +105,9 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          tenant_id: string;
-          court_id: string;
-          user_id: string;
+          club_id: string;
+          user_id?: string;
+          guest_id?: string;
           start_time: string;
           end_time: string;
           status?: 'pending' | 'confirmed' | 'cancelled';
@@ -119,8 +119,9 @@ export interface Database {
           recurring_config?: Record<string, any>;
         };
         Update: {
-          court_id?: string;
+          club_id?: string;
           user_id?: string;
+          guest_id?: string;
           start_time?: string;
           end_time?: string;
           status?: 'pending' | 'confirmed' | 'cancelled';
@@ -161,6 +162,39 @@ export interface Database {
           updated_at?: string;
         };
       };
+      guests: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          name: string;
+          phone: string;
+          notes?: string;
+          metadata?: Record<string, any>;
+          created_at: string;
+          updated_at: string;
+          created_by?: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          name: string;
+          phone: string;
+          notes?: string;
+          metadata?: Record<string, any>;
+          created_at?: string;
+          updated_at?: string;
+          created_by?: string;
+        };
+        Update: {
+          tenant_id?: string;
+          name?: string;
+          phone?: string;
+          notes?: string;
+          metadata?: Record<string, any>;
+          updated_at?: string;
+          created_by?: string;
+        };
+      };
     };
   };
 }
@@ -186,6 +220,8 @@ export interface BookingRequest {
   startTime: string;
   endTime: string;
   bookingType: 'single' | 'recurring' | 'membership';
+  userId?: string;    // For registered user bookings
+  guestId?: string;   // For guest bookings (mutually exclusive with userId)
   metadata?: Record<string, any>;
 }
 

@@ -2,57 +2,54 @@
 -- Table order and constraints may not be valid for execution.
 
 CREATE TABLE public.booked_slots (
-                                     expiry_at timestamp without time zone,
+                                     id uuid NOT NULL DEFAULT uuid_generate_v4(),
                                      booking_id uuid NOT NULL,
                                      court_id uuid NOT NULL,
                                      start_time timestamp with time zone NOT NULL,
                                      end_time timestamp with time zone NOT NULL,
-                                     id uuid NOT NULL DEFAULT uuid_generate_v4(),
                                      status USER-DEFINED DEFAULT 'scheduled'::booked_slot_status,
                                      price numeric NOT NULL DEFAULT 0.00 CHECK (price >= 0::numeric),
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   match_id uuid,
+  expiry_at timestamp without time zone,
   CONSTRAINT booked_slots_pkey PRIMARY KEY (id),
-  CONSTRAINT booked_slots_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
   CONSTRAINT booked_slots_court_id_fkey FOREIGN KEY (court_id) REFERENCES public.courts(id),
-  CONSTRAINT booked_slots_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id)
+  CONSTRAINT booked_slots_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
+  CONSTRAINT booked_slots_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.bookings (
-                                 club_id uuid NOT NULL,
-                                 user_id uuid NOT NULL,
+                                 id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                                 user_id uuid,
                                  start_time timestamp with time zone NOT NULL,
                                  end_time timestamp with time zone NOT NULL,
-                                 id uuid NOT NULL DEFAULT uuid_generate_v4(),
                                  status USER-DEFINED DEFAULT 'pending'::booking_status,
                                  booking_type USER-DEFINED DEFAULT 'single'::booking_type,
                                  total_amount numeric NOT NULL DEFAULT 0.00 CHECK (total_amount >= 0::numeric),
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  club_id uuid NOT NULL,
   recurring_config jsonb DEFAULT '{}'::jsonb,
+  guest_id uuid,
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
+  CONSTRAINT bookings_club_id_fkey FOREIGN KEY (club_id) REFERENCES public.clubs(id),
   CONSTRAINT bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT bookings_club_id_fkey FOREIGN KEY (club_id) REFERENCES public.clubs(id)
+  CONSTRAINT bookings_guest_id_fkey FOREIGN KEY (guest_id) REFERENCES public.guests(id)
 );
 CREATE TABLE public.clubs (
-                              logo character varying,
+                              id uuid NOT NULL DEFAULT gen_random_uuid(),
                               tenant_id uuid NOT NULL,
                               name character varying NOT NULL,
                               description text,
                               address text,
                               phone character varying,
                               email character varying,
-                              id uuid NOT NULL DEFAULT gen_random_uuid(),
                               settings jsonb DEFAULT '{}'::jsonb,
                               status character varying DEFAULT 'active'::character varying CHECK (status::text = ANY (ARRAY['active'::character varying, 'inactive'::character varying]::text[])),
                               created_at timestamp with time zone DEFAULT now(),
                               updated_at timestamp with time zone DEFAULT now(),
-                              contact_person character varying,
-                              emergency_contact character varying,
-                              business_license character varying,
-                              tax_id character varying,
                               opening_time time without time zone DEFAULT '06:00:00'::time without time zone,
                               closing_time time without time zone DEFAULT '22:00:00'::time without time zone,
                               timezone character varying DEFAULT 'Asia/Ho_Chi_Minh'::character varying,
@@ -68,18 +65,23 @@ CREATE TABLE public.clubs (
                               instagram character varying,
                               amenities jsonb DEFAULT '[]'::jsonb,
                               policies jsonb DEFAULT '{}'::jsonb,
+                              contact_person character varying,
+                              emergency_contact character varying,
+                              business_license character varying,
+                              tax_id character varying,
+                              logo character varying,
                               allow_half_hour_slots boolean NOT NULL DEFAULT false,
                               prevent_orphan_30min boolean NOT NULL DEFAULT false,
                               CONSTRAINT clubs_pkey PRIMARY KEY (id),
                               CONSTRAINT clubs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
 );
 CREATE TABLE public.court_prices (
+                                     id uuid NOT NULL DEFAULT uuid_generate_v4(),
                                      court_id uuid NOT NULL,
                                      day_of_week integer NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
                                      start_time time without time zone NOT NULL,
                                      end_time time without time zone NOT NULL,
                                      price numeric NOT NULL CHECK (price >= 0::numeric),
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
@@ -87,8 +89,8 @@ CREATE TABLE public.court_prices (
   CONSTRAINT court_prices_court_id_fkey FOREIGN KEY (court_id) REFERENCES public.courts(id)
 );
 CREATE TABLE public.courts (
-                               name character varying NOT NULL,
                                id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                               name character varying NOT NULL,
                                type character varying DEFAULT 'badminton'::character varying,
                                status USER-DEFINED DEFAULT 'active'::court_status,
                                settings jsonb DEFAULT '{}'::jsonb,
@@ -98,36 +100,50 @@ CREATE TABLE public.courts (
                                CONSTRAINT courts_pkey PRIMARY KEY (id),
                                CONSTRAINT courts_club_id_fkey FOREIGN KEY (club_id) REFERENCES public.clubs(id)
 );
+CREATE TABLE public.guests (
+                               id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                               tenant_id uuid NOT NULL,
+                               name character varying NOT NULL,
+                               phone character varying NOT NULL,
+                               notes text,
+                               metadata jsonb DEFAULT '{}'::jsonb,
+                               created_at timestamp with time zone DEFAULT now(),
+                               updated_at timestamp with time zone DEFAULT now(),
+                               created_by uuid,
+                               CONSTRAINT guests_pkey PRIMARY KEY (id),
+                               CONSTRAINT guests_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+                               CONSTRAINT guests_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id)
+);
 CREATE TABLE public.matches (
-                                type character varying DEFAULT 'friendly'::character varying,
-                                is_open boolean NOT NULL DEFAULT false,
+                                id uuid NOT NULL DEFAULT uuid_generate_v4(),
                                 booking_id uuid NOT NULL,
                                 team_one_id uuid NOT NULL,
                                 team_two_id uuid NOT NULL,
+                                status USER-DEFINED DEFAULT 'scheduled'::match_status,
                                 result USER-DEFINED,
                                 match_date timestamp with time zone,
                                 duration_minutes integer,
                                 notes text,
-                                id uuid NOT NULL DEFAULT uuid_generate_v4(),
-                                status USER-DEFINED DEFAULT 'scheduled'::match_status,
                                 metadata jsonb DEFAULT '{}'::jsonb,
                                 created_at timestamp with time zone DEFAULT now(),
                                 updated_at timestamp with time zone DEFAULT now(),
+                                type character varying DEFAULT 'friendly'::character varying,
+                                is_open boolean NOT NULL DEFAULT false,
                                 CONSTRAINT matches_pkey PRIMARY KEY (id),
+                                CONSTRAINT matches_team_two_id_fkey FOREIGN KEY (team_two_id) REFERENCES public.teams(id),
                                 CONSTRAINT matches_team_one_id_fkey FOREIGN KEY (team_one_id) REFERENCES public.teams(id),
-                                CONSTRAINT matches_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
-                                CONSTRAINT matches_team_two_id_fkey FOREIGN KEY (team_two_id) REFERENCES public.teams(id)
+                                CONSTRAINT matches_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.payments (
+                                 id uuid NOT NULL DEFAULT uuid_generate_v4(),
                                  tenant_id uuid NOT NULL,
                                  booking_id uuid NOT NULL,
                                  amount numeric NOT NULL CHECK (amount > 0::numeric),
   payment_method character varying NOT NULL,
   transaction_id character varying,
-  paid_at timestamp with time zone,
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
   status USER-DEFINED DEFAULT 'pending'::payment_status,
   metadata jsonb DEFAULT '{}'::jsonb,
+  paid_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT payments_pkey PRIMARY KEY (id),
@@ -135,56 +151,56 @@ CREATE TABLE public.payments (
   CONSTRAINT payments_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.sets (
+                             id uuid NOT NULL DEFAULT uuid_generate_v4(),
                              match_id uuid NOT NULL,
                              set_number integer NOT NULL CHECK (set_number > 0),
-                             winner_team_id uuid,
-                             notes text,
-                             id uuid NOT NULL DEFAULT uuid_generate_v4(),
                              team_one_score integer NOT NULL DEFAULT 0 CHECK (team_one_score >= 0),
                              team_two_score integer NOT NULL DEFAULT 0 CHECK (team_two_score >= 0),
+                             winner_team_id uuid,
+                             notes text,
                              metadata jsonb DEFAULT '{}'::jsonb,
                              created_at timestamp with time zone DEFAULT now(),
                              updated_at timestamp with time zone DEFAULT now(),
                              CONSTRAINT sets_pkey PRIMARY KEY (id),
-                             CONSTRAINT sets_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
-                             CONSTRAINT sets_winner_team_id_fkey FOREIGN KEY (winner_team_id) REFERENCES public.teams(id)
+                             CONSTRAINT sets_winner_team_id_fkey FOREIGN KEY (winner_team_id) REFERENCES public.teams(id),
+                             CONSTRAINT sets_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id)
 );
 CREATE TABLE public.teams (
-                              name character varying,
                               id uuid NOT NULL DEFAULT uuid_generate_v4(),
+                              name character varying,
+                              player_one_id uuid,
+                              player_two_id uuid,
                               metadata jsonb DEFAULT '{}'::jsonb,
                               created_at timestamp with time zone DEFAULT now(),
                               updated_at timestamp with time zone DEFAULT now(),
-                              player_one_id uuid,
-                              player_two_id uuid,
                               CONSTRAINT teams_pkey PRIMARY KEY (id),
                               CONSTRAINT teams_player_one_id_fkey FOREIGN KEY (player_one_id) REFERENCES public.users(id),
                               CONSTRAINT teams_player_two_id_fkey FOREIGN KEY (player_two_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.tenants (
+                                id uuid NOT NULL DEFAULT uuid_generate_v4(),
                                 name character varying NOT NULL,
                                 slug character varying NOT NULL UNIQUE,
                                 domain character varying,
-                                id uuid NOT NULL DEFAULT uuid_generate_v4(),
                                 settings jsonb DEFAULT '{}'::jsonb,
                                 created_at timestamp with time zone DEFAULT now(),
                                 updated_at timestamp with time zone DEFAULT now(),
                                 CONSTRAINT tenants_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.users (
-                              phone character varying,
-                              full_name character varying,
-                              level real NOT NULL DEFAULT '0.1'::real,
-                              reliability USER-DEFINED DEFAULT 'beginner'::reliability_level,
                               id uuid NOT NULL,
                               email character varying UNIQUE,
-                              tenant_id uuid,
                               profile jsonb DEFAULT '{}'::jsonb,
                               role USER-DEFINED NOT NULL DEFAULT 'customer'::user_role,
+                              tenant_id uuid,
                               is_super_admin boolean DEFAULT false,
                               created_at timestamp with time zone DEFAULT now(),
                               updated_at timestamp with time zone DEFAULT now(),
+                              phone character varying,
+                              full_name character varying,
                               avatar_url character varying,
+                              level real NOT NULL DEFAULT '0.1'::real,
+                              reliability USER-DEFINED DEFAULT 'beginner'::reliability_level,
                               CONSTRAINT users_pkey PRIMARY KEY (id),
                               CONSTRAINT users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
                               CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)

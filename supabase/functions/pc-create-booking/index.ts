@@ -13,15 +13,11 @@ import { RecurringBookingService } from '../../../src/services/RecurringBookingS
 
 interface CreateBookingRequest {
   court_id: string
-  user_id?: string   // Optional for guest bookings
+  user_id?: string   // For registered user bookings
+  guest_id?: string  // For guest bookings (mutually exclusive with user_id)
   start_time: string // ISO timestamp
   end_time: string   // ISO timestamp
   notes?: string
-  customer_info?: {
-    name?: string
-    phone?: string
-    email?: string
-  }
   booking_type?: 'single' | 'recurring'
   recurring_config?: {
     frequency: 'daily' | 'weekly' | 'monthly'
@@ -54,6 +50,14 @@ serve(async (req) => {
     // Validate required fields
     if (!requestData.court_id || !requestData.start_time || !requestData.end_time) {
       return createErrorResponse('Missing required fields: court_id, start_time, end_time', 400)
+    }
+
+    // Validate mutually exclusive user_id vs guest_id
+    const hasUser = !!requestData.user_id
+    const hasGuest = !!requestData.guest_id
+    
+    if (hasUser === hasGuest) {
+      return createErrorResponse('Must provide either user_id or guest_id, not both', 400)
     }
 
     // Validate recurring config if provided
@@ -160,7 +164,8 @@ serve(async (req) => {
     // Create booking
     const booking = await bookingService.createBooking({
       clubId: court.club_id,
-      userId: requestData.user_id || null, // null for guest bookings
+      userId: requestData.user_id || null,
+      guestId: requestData.guest_id || null,
       startTime: requestData.start_time,
       endTime: requestData.end_time,
       totalAmount: totalAmount,
@@ -168,12 +173,10 @@ serve(async (req) => {
       recurringConfig: requestData.recurring_config,
       metadata: {
         notes: requestData.notes,
-        customer_info: requestData.customer_info,
         court_id: requestData.court_id,
         court_name: court.name,
         club_name: court.club.name,
-        slots_count: slots.length,
-        is_guest_booking: !requestData.user_id
+        slots_count: slots.length
       }
     })
 
@@ -183,9 +186,9 @@ serve(async (req) => {
       courtId: requestData.court_id,
       slots: slots,
       metadata: {
-        created_by: requestData.user_id || 'guest',
+        created_by: requestData.user_id || requestData.guest_id || 'guest',
         booking_type: bookingType,
-        is_guest_booking: !requestData.user_id
+        is_guest_booking: !!requestData.guest_id
       }
     })
 

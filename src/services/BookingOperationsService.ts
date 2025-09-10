@@ -17,7 +17,8 @@ export interface UpdateBookedSlotsInput {
 
 export interface CreateBookingInput {
   clubId: string
-  userId: string
+  userId?: string | null    // Optional for guest bookings
+  guestId?: string | null   // Optional for user bookings  
   startTime: string
   endTime: string
   totalAmount: number
@@ -139,6 +140,7 @@ export class BookingOperationsService {
     const { 
       clubId, 
       userId, 
+      guestId,
       startTime, 
       endTime, 
       totalAmount, 
@@ -147,9 +149,20 @@ export class BookingOperationsService {
       metadata 
     } = input
 
+    // Validate mutually exclusive user_id vs guest_id
+    if (!!userId === !!guestId) {
+      throw new Error('Must provide either userId or guestId, not both')
+    }
+
+    // Validate guest exists and belongs to tenant if guest booking
+    if (guestId) {
+      await this.validateGuestAccess(guestId, clubId)
+    }
+
     const bookingData = {
       club_id: clubId,
       user_id: userId,
+      guest_id: guestId,
       start_time: startTime,
       end_time: endTime,
       booking_type: bookingType,
@@ -158,7 +171,8 @@ export class BookingOperationsService {
       recurring_config: recurringConfig || {},
       metadata: {
         ...metadata,
-        created_by: userId
+        created_by: userId || 'guest',
+        is_guest_booking: !!guestId
       }
     }
 
@@ -173,6 +187,36 @@ export class BookingOperationsService {
     }
 
     return booking
+  }
+
+  /**
+   * Validate guest exists and belongs to the same tenant as the club
+   */
+  private async validateGuestAccess(guestId: string, clubId: string): Promise<void> {
+    const { data: clubWithTenant, error: clubError } = await this.supabase
+      .from('clubs')
+      .select('tenant_id')
+      .eq('id', clubId)
+      .single()
+
+    if (clubError || !clubWithTenant) {
+      throw new Error('Club not found')
+    }
+
+    const { data: guest, error: guestError } = await this.supabase
+      .from('guests')
+      .select('id')
+      .eq('id', guestId)
+      .eq('tenant_id', clubWithTenant.tenant_id)
+      .maybeSingle()
+
+    if (guestError) {
+      throw new Error(`Failed to validate guest: ${guestError.message}`)
+    }
+
+    if (!guest) {
+      throw new Error('Guest not found or does not belong to this tenant')
+    }
   }
 
   async createBookedSlot(input: CreateBookedSlotInput): Promise<void> {
@@ -317,6 +361,7 @@ export class BookingOperationsService {
         id,
         club_id,
         user_id,
+        guest_id,
         start_time,
         end_time,
         booking_type,
@@ -327,7 +372,20 @@ export class BookingOperationsService {
         updated_at,
         club:clubs(
           id,
-          tenant_id
+          tenant_id,
+          name
+        ),
+        user:users(
+          id,
+          full_name,
+          phone,
+          email
+        ),
+        guest:guests(
+          id,
+          name,
+          phone,
+          notes
         ),
         booked_slots(
           id,
